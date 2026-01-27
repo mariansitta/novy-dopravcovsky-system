@@ -1,0 +1,121 @@
+.footer {
+  text-align: center;
+}
+
+.nav-link:hover {
+  color: #7b8190 !important;
+}
+
+.nav-item .nav-link {
+  font-size: 16px !important;
+}
+.nav-item .nav-link span {
+  font-weight: 700;
+}
+
+h4 span {
+  font-weight: 700;
+}
+
+.alert {
+  margin-bottom: 0;
+}
+
+.bootstrap-filestyle label {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  height: 100%;
+  margin: 0;
+}
+
+.file-buttons {
+  float: left;
+}
+
+.alert {
+  margin-bottom: 15px;
+}
+
+.logo .logo-light, .logo span.logo-lg, .logo-light {
+  display: block !important;
+}
+
+.collapse:not(.show) {
+  display: block !important;
+}
+
+@media (max-width: 991.98px) {
+  .topnav {
+    position: inherit !important;
+    border-radius: 4px;
+    margin-bottom: -10px;
+  }
+
+  .row {
+    margin-top: 40px;
+  }
+}
+.main-info {
+  margin-top: 20px;
+  margin-bottom: 20px;
+}
+
+.mt-20 {
+  margin-top: 20px;
+}
+
+.divider {
+  border-top: 1px solid #ddd;
+  margin: 25px;
+}
+
+.modal-dialog {
+  max-width: 80%;
+}
+
+.modal-open {
+  overflow: unset;
+}
+
+body {
+  padding-right: 0 !important;
+}
+
+.close-modal {
+  border: none;
+  float: right;
+  font-size: 1.21875rem;
+  font-weight: 600;
+  line-height: 1;
+  color: #000;
+  text-shadow: 0 1px 0 #fff;
+  opacity: 0.5;
+  background-color: transparent;
+}
+
+.card-title {
+  margin-bottom: 28px;
+}
+
+.me-1 {
+  margin-right: 0 !important;
+}
+
+.action-button {
+  padding: 4px 7px 3px;
+}
+
+.table {
+  border: 1px solid #dee2e6;
+}
+.table th {
+  background-color: #eee;
+}
+
+.dataTables_scroll {
+  font-size: 10px;
+}
+.dataTables_scroll tr {
+  border-color: #eee !important;
+  vertical-align: middle;
+}

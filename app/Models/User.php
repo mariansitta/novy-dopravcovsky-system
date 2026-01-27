@@ -2,47 +2,73 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Notifications\DocumentsRequested;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
+use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
-    /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable;
+    use Notifiable, SoftDeletes;
 
     /**
      * The attributes that are mass assignable.
      *
-     * @var list<string>
+     * @var string[]
      */
     protected $fillable = [
+        'username',
         'name',
         'email',
-        'password',
+        'country',
+        'driver_id',
     ];
+
+    protected $dates = ['deleted_at'];
 
     /**
      * The attributes that should be hidden for serialization.
      *
-     * @var list<string>
+     * @var array
      */
     protected $hidden = [
-        'password',
         'remember_token',
+        'password'
     ];
 
     /**
-     * Get the attributes that should be cast.
+     * The attributes that should be cast.
      *
-     * @return array<string, string>
+     * @var array
      */
-    protected function casts(): array
-    {
-        return [
-            'email_verified_at' => 'datetime',
-            'password' => 'hashed',
-        ];
+    protected $casts = [
+        //
+    ];
+
+    public function transports(){
+        return $this->hasMany(Transport::class);
     }
+
+    public function generateLink($password){
+        //$link = route('login', [ 'email' => $this->email, 'password' => $password ]);
+        $this->password = bcrypt($password);
+
+        $token = null;
+        do {
+            $token = Str::random(32);
+        } while (User::where('token', $token)->exists());
+        $this->token = $token;
+        
+        $this->save();
+
+        $link = route('transports.enter', [ 'token' => $token ]);
+
+        return $link;
+    }
+
 }

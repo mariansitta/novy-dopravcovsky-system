@@ -1,0 +1,33 @@
+.footer {
+  left: 0;
+  text-align: center;
+}
+
+.auth-logo {
+  cursor: default;
+}
+
+.created-by {
+  font-size: 12px;
+  margin-top: 0 !important;
+}
+
+.d-none {
+  display: inline-block !important;
+}
+
+.redirect_link {
+  float: left;
+}
+
+#login-button {
+  float: right;
+}
+
+.forgot-password {
+  padding-top: 10px;
+}
+
+.password-reset-alert {
+  text-align: center;
+}
