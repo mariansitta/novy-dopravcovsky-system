@@ -49,6 +49,11 @@ return [
             'local_domain' => env('MAIL_EHLO_DOMAIN', parse_url((string) env('APP_URL', 'http://localhost'), PHP_URL_HOST)),
         ],
 
+        'gmailapi' => [
+            'transport'   => 'gmailapi',
+            'impersonate' => env('GMAIL_IMPERSONATE', 'spedicia@damaro-slovakia.eu'),
+        ],
+
         'ses' => [
             'transport' => 'ses',
         ],
