@@ -187,8 +187,10 @@ class TransportsController extends Admin\AdminController
                 "statuses.name_$locale AS status_name",
                 "statuses.slug AS status_slug",
                 'transports.status_id AS status_id',
-                DB::raw("(SELECT CONCAT(path, '', filename) AS full_path FROM files WHERE type = 'bill' AND fileable_id = transports.id AND deleted_at IS NULL) AS bill"),
-                DB::raw("(SELECT CONCAT(path, '', filename) AS full_path FROM files WHERE type = 'docs' AND fileable_id = transports.id AND deleted_at IS NULL) AS docs"),
+                //DB::raw("(SELECT CONCAT(path, '', filename) AS full_path FROM files WHERE type = 'bill' AND fileable_id = transports.id AND deleted_at IS NULL) AS bill"),
+                //DB::raw("(SELECT CONCAT(path, '', filename) AS full_path FROM files WHERE type = 'docs' AND fileable_id = transports.id AND deleted_at IS NULL) AS docs"),
+                DB::raw("(SELECT CONCAT(path, '', filename) FROM files WHERE type = 'bill' AND fileable_id = transports.id AND deleted_at IS NULL ORDER BY id DESC LIMIT 1) AS bill"),
+                DB::raw("(SELECT CONCAT(path, '', filename) FROM files WHERE type = 'docs' AND fileable_id = transports.id AND deleted_at IS NULL ORDER BY id DESC LIMIT 1) AS docs"),
                 DB::raw("CASE WHEN deleted_at IS NULL THEN 0 ELSE 1 END AS is_deleted"),
                 DB::raw("(SELECT status FROM transport_statuses WHERE transport_statuses.transport_id = transports.id ORDER BY created_at DESC LIMIT 1) AS transport_status")
                 )
