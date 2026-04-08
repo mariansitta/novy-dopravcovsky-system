@@ -43,10 +43,15 @@ Route::middleware(['api_key'])->group(function (){
     Route::post('/transport/exists', [API\TransportsController::class, 'exists'])->name('transport.exists');
     Route::post('/transport/bill-delete', [API\TransportsController::class, 'bill_delete'])->name('transport.bill_delete');
     Route::post('/transport/docs-delete', [API\TransportsController::class, 'docs_delete'])->name('transport.docs_delete');
+    Route::post('/transports/get_visible_transports', [API\TransportsController::class, 'get_visible_transports'])->name('transports.get_visible_transports');
+    Route::post('/transport/set_visibility', [API\TransportsController::class, 'set_visibility'])->name('transport.set_visibility');
+
+    // Payments sync
+    Route::post('/transports/unpaid', [API\TransportsController::class, 'unpaid'])->name('transports.unpaid');
+    Route::post('/transports/sync-payments', [API\TransportsController::class, 'sync'])->name('transports.sync_payments');
 
     Route::post('/unsubscribes/get', [API\EmailUnsubscribesController::class, 'get'])->name('unsubscribes.get');
     Route::post('/unsubscribes/delete', [API\EmailUnsubscribesController::class, 'delete'])->name('unsubscribes.delete');
     Route::post('/unsubscribes/url', [API\EmailUnsubscribesController::class, 'url'])->name('unsubscribe.url');
 
 });
-

@@ -22,7 +22,44 @@ class TransportsController extends Admin\AdminController
 {
     use UploadTrait;
 
-    public function index(){
+    public function index()
+    {
+        $table = Transport::with([
+                'status',
+                'transport_status',
+                'files' => fn($q) => $q->whereNull('deleted_at')
+            ])
+            ->where('user_id', auth()->user()->id)
+            ->visible()
+            ->orderBy('number', 'desc')
+            ->get();
+
+        /*
+        $table = Transport::with([
+                'status',
+                'transport_status',
+                'files' => fn($q) => $q->whereNull('deleted_at')
+            ])
+            ->where('user_id', auth()->user()->id)
+            ->whereDate('created_at', '>', now()->subMonths(3)->startOfDay())
+            ->where(function ($query) {
+                $query->whereDate('created_at', '>', now()->subDays(60)->startOfDay())
+                    ->orWhere('bill_sent', 0)
+                    ->orWhere('docs_sent', 0);
+            })
+            ->where(function ($query) {
+                $query->whereDate('deleted_at', '>', now()->subDays(10)->startOfDay())
+                    ->orWhereNull('deleted_at');
+            })
+            ->withTrashed()
+            ->orderBy('number', 'desc')
+            ->get();
+        */
+
+        return view('web.transports.index', compact('table'));
+    }
+
+    public function index_old(){
         $transport = auth()->user()->transport;
 
         return view('web.transports.index', compact( 'transport'));

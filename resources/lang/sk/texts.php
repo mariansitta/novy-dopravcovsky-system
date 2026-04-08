@@ -34,6 +34,7 @@ return [
     'Driver plate number' => 'EČV',
     'Driver price' => 'Vodič €',
     'Status' => 'Status',
+    'Paid at' => 'Uhradené',
     'TransportStatus' => 'Stav prepravy',
     'Notice' => 'Poznámka',
     'Bill' => 'Faktúra',

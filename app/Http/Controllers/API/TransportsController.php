@@ -233,4 +233,73 @@ class TransportsController extends Controller
         return response([], 200);
     }
 
+    public function unpaid()
+    {
+        $transports = Transport::withTrashed()
+            ->whereNull('paid_at')
+            ->whereNotNull('transport_id')
+            ->select('id', 'transport_id')
+            ->get();
+
+        return response()->json(['transports' => $transports]);
+    }
+
+    public function sync(Request $request)
+    {
+        $payments = $request->all();
+
+        $updated = 0;
+        collect($payments)->chunk(500)->each(function ($chunk) use (&$updated) {
+            foreach ($chunk as $payment) {
+                if (empty($payment['paid_at'])) continue;
+
+                $affected = Transport::withTrashed()
+                    ->where('id', $payment['id'])
+                    ->whereNull('paid_at')
+                    ->update(['paid_at' => $payment['paid_at']]);
+
+                $updated += $affected;
+            }
+        });
+
+        return response()->json(['updated' => $updated]);
+    }
+
+    // Get visible transports based on visibility column and normal logic
+    public function get_visible_transports()
+    {
+        $transports = Transport::withTrashed()
+            ->whereNotNull('transport_id')
+            ->visible()
+            ->pluck('transport_id');
+
+        return response()->json(['transports' => $transports]);
+    }
+
+    // Set visibility for transport: null = normálna logika, 'hidden' = vždy skryť, 'visible' = vždy zobraziť
+    public function set_visibility(Request $request)
+    {
+        $request->validate([
+            'id'         => 'required',
+            'visibility' => 'nullable|in:hidden,visible',
+        ]);
+
+        $transport = Transport::on('mysql')->withTrashed()
+            ->where('transport_id', $request->id)
+            ->firstOrFail();
+
+        $visibility = $request->visibility ?: null;
+        $transport->visibility = $visibility;
+        $transport->save();
+
+        Log::info('Transport visibility set', [
+            'transport_id' => $request->id,
+            'visibility'   => $request->visibility,
+        ]);
+
+        return response()->json([
+            'ok'         => true,
+            'visibility' => $transport->visibility,
+        ]);
+    }
 }

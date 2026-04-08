@@ -39,6 +39,7 @@ return [
     'Driver plate number' => 'Driver plate number',
     'Driver price' => 'Driver €',
     'Due date' => 'Due date',
+    'Paid at' => 'Paid at',
     'Notice' => 'Notice',
     'Bill' => 'Invoice',
     'Docs' => 'Documents',
