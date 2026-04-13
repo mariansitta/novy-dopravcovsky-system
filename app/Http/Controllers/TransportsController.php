@@ -8,6 +8,7 @@ use App\Http\Requests\BillDocumentRequest;
 use App\Http\Requests\DocsDocumentRequest;
 use App\Http\Requests\DocumentsRequest;
 use App\Http\Requests\DeleteDocumentRequest;
+use App\Models\DriverMessage;
 use App\Models\Status;
 use App\Models\Transport;
 use App\Models\TransportStatus;
@@ -56,7 +57,61 @@ class TransportsController extends Admin\AdminController
             ->get();
         */
 
-        return view('web.transports.index', compact('table'));
+        // Počet neprečítaných správ od Damaro pre tohto dopravcu
+        $unreadCount = DriverMessage::where('driver_id', auth()->user()->driver_id)
+            ->where('direction', 'damaro')
+            ->whereNull('read_at')
+            ->count();
+
+        return view('web.transports.index', compact('table', 'unreadCount'));
+    }
+
+    // Vráti históriu správ + označí správy od Damaro ako prečítané
+    public function messages_load()
+    {
+        $driverId = auth()->user()->driver_id;
+
+        // Označ správy od Damaro ako prečítané
+        DriverMessage::where('driver_id', $driverId)
+            ->where('direction', 'damaro')
+            ->whereNull('read_at')
+            ->update(['read_at' => now()]);
+
+        // Načítaj celú históriu
+        $messages = DriverMessage::where('driver_id', $driverId)
+            ->orderBy('created_at', 'asc')
+            ->get()
+            ->map(fn ($msg) => [
+                'direction'  => $msg->direction,
+                'body'       => $msg->body,
+                'created_at' => $msg->created_at->format('d.m.Y H:i'),
+            ]);
+
+        return response()->json(['messages' => $messages]);
+    }
+
+    // Uloží novú správu od dopravcu
+    public function messages_send(Request $request)
+    {
+        $request->validate([
+            'body' => 'required|string|max:2000',
+        ]);
+
+        $driverId = auth()->user()->driver_id;
+
+        if (!$driverId) {
+            return response()->json(['ok' => false, 'error' => 'Driver not assigned.'], 422);
+        }
+
+        DriverMessage::create([
+            'driver_id'  => $driverId,
+            'direction'  => 'driver',
+            'body'       => $request->body,
+            'read_at'    => null,
+            'synced_at'  => null,
+        ]);
+
+        return response()->json(['ok' => true]);
     }
 
     public function index_old(){

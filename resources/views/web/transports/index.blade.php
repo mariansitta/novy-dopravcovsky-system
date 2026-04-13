@@ -135,6 +135,43 @@
                 </div>
             </div>
 
+            {{-- Panel správ (dočasne iba pre spedicia@damaro-slovakia.eu) --}}
+            @if(auth()->check() && auth()->user()->email === 'spedicia@damaro-slovakia.eu')
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title mb-0" id="messages-toggle" style="cursor: pointer; user-select: none;">
+                        <i class="fas fa-comments mr-2"></i>
+                        Správy
+                        @if($unreadCount > 0)
+                            <span class="badge badge-danger ml-2" id="unread-badge">{{ $unreadCount }}</span>
+                        @else
+                            <span class="badge badge-secondary ml-2" id="unread-badge" style="display:none;">0</span>
+                        @endif
+                        <i class="fas fa-chevron-down ml-2 float-right" id="messages-chevron"></i>
+                    </h5>
+
+                    <div id="messages-panel" style="display: none; margin-top: 20px;">
+
+                        {{-- História správ --}}
+                        <div id="messages-history" style="max-height: 400px; overflow-y: auto; padding: 10px; background: #f8f9fa; border-radius: 6px; margin-bottom: 15px;">
+                            <p class="text-muted text-center" id="messages-loading">Načítavam správy...</p>
+                        </div>
+
+                        {{-- Formulár na odoslanie správy --}}
+                        <div>
+                            <textarea id="message-body" class="form-control" rows="3" placeholder="Napíšte správu..." maxlength="2000" style="resize: vertical;"></textarea>
+                            <div class="text-right mt-2">
+                                <button id="message-send-btn" class="btn btn-primary waves-effect waves-light">
+                                    <i class="fas fa-paper-plane mr-1"></i> Odoslať
+                                </button>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+            @endif
+
             <div class="card">
                 <div class="card-body">
                     <p>{!! trans('texts.manual-notice') !!}</p>
@@ -165,6 +202,102 @@
                 }
             }
         });
+
+        // ---- Správy ----
+
+        let messagesLoaded = false;
+
+        // Rozbalenie/zbalenie panelu
+        $('#messages-toggle').on('click', function () {
+            $('#messages-panel').slideToggle(200);
+            $('#messages-chevron').toggleClass('fa-chevron-down fa-chevron-up');
+
+            if (!messagesLoaded) {
+                loadMessages();
+            }
+        });
+
+        // Načítanie histórie správ + označenie ako prečítané
+        function loadMessages() {
+            $.ajax({
+                url: '{{ route("transports.messages.load") }}',
+                method: 'GET',
+                success: function (response) {
+                    messagesLoaded = true;
+                    $('#unread-badge').hide();
+
+                    let html = '';
+                    if (response.messages.length === 0) {
+                        html = '<p class="text-muted text-center">Žiadne správy.</p>';
+                    } else {
+                        response.messages.forEach(function (msg) {
+                            if (msg.direction === 'driver') {
+                                html += `
+                                    <div style="text-align: right; margin-bottom: 10px;">
+                                        <div style="display: inline-block; background: #007bff; color: #fff; padding: 8px 12px; border-radius: 12px 12px 0 12px; max-width: 75%; word-break: break-word;">
+                                            ${escapeHtml(msg.body)}
+                                        </div>
+                                        <div style="font-size: 11px; color: #999; margin-top: 2px;">${msg.created_at}</div>
+                                    </div>`;
+                            } else {
+                                html += `
+                                    <div style="text-align: left; margin-bottom: 10px;">
+                                        <div style="display: inline-block; background: #e9ecef; color: #333; padding: 8px 12px; border-radius: 12px 12px 12px 0; max-width: 75%; word-break: break-word;">
+                                            ${escapeHtml(msg.body)}
+                                        </div>
+                                        <div style="font-size: 11px; color: #999; margin-top: 2px;">${msg.created_at}</div>
+                                    </div>`;
+                            }
+                        });
+                    }
+
+                    $('#messages-history').html(html);
+                    $('#messages-history').scrollTop($('#messages-history')[0].scrollHeight);
+                },
+                error: function () {
+                    $('#messages-history').html('<p class="text-danger text-center">Chyba pri načítaní správ.</p>');
+                }
+            });
+        }
+
+        // Odoslanie správy
+        $('#message-send-btn').on('click', function () {
+            let body = $('#message-body').val().trim();
+            if (!body) return;
+
+            $('#message-send-btn').prop('disabled', true);
+
+            $.ajax({
+                url: '{{ route("transports.messages.send") }}',
+                method: 'POST',
+                data: {
+                    _token: '{{ csrf_token() }}',
+                    body: body,
+                },
+                success: function () {
+                    $('#message-body').val('');
+                    messagesLoaded = false;
+                    loadMessages();
+                },
+                error: function () {
+                    alert('Chyba pri odosielaní správy.');
+                },
+                complete: function () {
+                    $('#message-send-btn').prop('disabled', false);
+                }
+            });
+        });
+
+        // Escape HTML pre bezpečné zobrazenie textu
+        function escapeHtml(text) {
+            return text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;')
+                .replace(/\n/g, '<br>');
+        }
     });
 </script>
 @endsection

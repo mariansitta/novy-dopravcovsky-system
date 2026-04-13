@@ -43,6 +43,9 @@ Route::middleware(['auth'])->group(function(){
     Route::get('/transports/transport-status/{id}', [TransportsController::class, 'transport_status'])->name('transports.transport_status');
     Route::post('/transports/transport-status-form/{id}', [TransportsController::class, 'transport_status_form'])->name('transports.transport_status_form');
 
+    // Driver Messages (web routes - dopravcovsky system)
+    Route::get('/transports/messages/load', [TransportsController::class, 'messages_load'])->name('transports.messages.load');
+    Route::post('/transports/messages/send', [TransportsController::class, 'messages_send'])->name('transports.messages.send');
 });
 
 Auth::routes([

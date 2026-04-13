@@ -50,6 +50,11 @@ Route::middleware(['api_key'])->group(function (){
     Route::post('/transports/unpaid', [API\TransportsController::class, 'unpaid'])->name('transports.unpaid');
     Route::post('/transports/sync-payments', [API\TransportsController::class, 'sync'])->name('transports.sync_payments');
 
+    // Driver Messages
+    Route::post('/driver-messages/get', [API\DriverMessagesController::class, 'get'])->name('driver_messages.get');
+    Route::post('/driver-messages/mark-synced', [API\DriverMessagesController::class, 'mark_synced'])->name('driver_messages.mark_synced');
+    Route::post('/driver-messages/sync', [API\DriverMessagesController::class, 'sync'])->name('driver_messages.sync');
+
     Route::post('/unsubscribes/get', [API\EmailUnsubscribesController::class, 'get'])->name('unsubscribes.get');
     Route::post('/unsubscribes/delete', [API\EmailUnsubscribesController::class, 'delete'])->name('unsubscribes.delete');
     Route::post('/unsubscribes/url', [API\EmailUnsubscribesController::class, 'url'])->name('unsubscribe.url');

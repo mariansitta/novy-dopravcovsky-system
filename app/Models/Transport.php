@@ -113,10 +113,10 @@ class Transport extends BaseModel
                             ->whereNull('visibility')
                             ->where(function ($inner) {
                                 $inner
-                                    // 2a) Zaplatené transporty – zobraz max 3 mesiace od dátumu platby
+                                    // 2a) Zobraz max 3 mesiace od dátumu splatnosti
                                     ->where(function ($q) {
-                                        $q->whereNotNull('paid_at')
-                                        ->whereDate('paid_at', '>', now()->subMonths(3)->startOfDay());
+                                        $q->whereNotNull('due_date')
+                                        ->whereDate('due_date', '>', now()->subMonths(3)->startOfDay());
                                     })
                                     // 2b) Chýbajúce dokumenty – zobraz ak loading_date nie je starší ako 2 mesiace.
                                     //     Po 2 mesiacoch od naloženia sa predpokladá že dokumenty už neprídu
