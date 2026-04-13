@@ -143,9 +143,9 @@
                         <i class="fas fa-comments mr-2"></i>
                         Správy
                         @if($unreadCount > 0)
-                            <span class="badge badge-danger ml-2" id="unread-badge">{{ $unreadCount }}</span>
+                            <span class="badge ml-2" id="unread-badge" style="background-color:#dc3545; color:#fff;">{{ $unreadCount }}</span>
                         @else
-                            <span class="badge badge-secondary ml-2" id="unread-badge" style="display:none;">0</span>
+                            <span class="badge ml-2" id="unread-badge" style="background-color:#dc3545; color:#fff; display:none;">0</span>
                         @endif
                         <i class="fas fa-chevron-down ml-2 float-right" id="messages-chevron"></i>
                     </h5>
