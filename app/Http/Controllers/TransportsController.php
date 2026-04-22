@@ -63,7 +63,9 @@ class TransportsController extends Admin\AdminController
             ->whereNull('read_at')
             ->count();
 
-        return view('web.transports.index', compact('table', 'unreadCount'));
+        $hasCargo = $table->whereNotNull('cargo_vehicle_plate')->isNotEmpty();
+
+        return view('web.transports.index', compact('table', 'unreadCount', 'hasCargo'));
     }
 
     // Vráti históriu správ + označí správy od Damaro ako prečítané

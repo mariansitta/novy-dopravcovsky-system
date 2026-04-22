@@ -12,7 +12,12 @@
             <div class="card">
                 <div class="card-body">
 
-                    <h4 class="card-title">{{ trans('texts.Transports') }}</h4>
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h4 class="card-title mb-0">{{ trans('texts.Transports') }}</h4>
+                        @if($hasCargo)
+                            <a href="{{ route('cargo.index') }}" class="btn btn-primary btn-sm">Prepravy podľa vozidiel</a>
+                        @endif
+                    </div>
 
                     @include('web._partials._alert')
 
@@ -117,7 +122,9 @@
                                         </td>
 
                                         <td>
-                                            @if(!($item->bill_file && $item->docs_file) && !$item->is_deleted)
+                                            @if($item->invoice_type === 'mail')
+                                                <span class="badge text-dark" style="background-color:#ffc107" title="Faktúra poštou">Poštou</span>
+                                            @elseif(!($item->bill_file && $item->docs_file) && !$item->is_deleted)
                                                 <a
                                                     class="btn btn-warning waves-effect waves-light action-button"
                                                     title="{{ trans('texts.Upload documents') }}"

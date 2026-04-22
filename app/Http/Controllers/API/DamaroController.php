@@ -126,6 +126,8 @@ class DamaroController extends Controller
                 $transport->driver_notice = null;
             }
 
+            $transport->invoice_type = $request->transport['invoice_type'] ?? null;
+
             $transport->save();
         }
 
@@ -237,6 +239,30 @@ class DamaroController extends Controller
 
         return response()->json([
         ], 200);
+    }
+
+    // Update cargo-specific fields for an already-synced transport
+    public function update_cargo(Request $request) {
+        $transport = Transport::withTrashed()
+            ->where('transport_id', $request->input('transport_id'))
+            ->first();
+
+        if (!$transport) {
+            return response()->json(['error' => 'Transport not found'], 404);
+        }
+
+        $transport->cargo_vehicle_plate       = $request->input('cargo_vehicle_plate');
+        $transport->cargo_vehicle_description = $request->input('cargo_vehicle_description');
+        $transport->cargo_week                = $request->input('cargo_week');
+        $transport->pdf_pin                   = $request->input('pdf_pin');
+        $transport->loadings_json             = $request->input('loadings', []);
+        $transport->unloadings_json           = $request->input('unloadings', []);
+        $transport->distance                  = $request->input('distance');
+        $transport->price_per_km              = $request->input('price_per_km');
+        $transport->invoice_type              = $request->input('invoice_type');
+        $transport->save();
+
+        return response()->json(['ok' => true], 200);
     }
 
     // create link for new user

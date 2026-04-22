@@ -34,6 +34,7 @@ Route::middleware(['api_key'])->group(function (){
     Route::post('/transport/existing', [API\DamaroController::class, 'existing_transports'])->name('transport.existing');
     Route::post('/transport/modify_driver_notice', [API\DamaroController::class, 'modify_driver_notice'])->name('transport.modify_driver_notice');
     Route::post('/transport/assign_driver_link', [API\DamaroController::class, 'assign_driver_link'])->name('transport.assign_driver_link');
+    Route::post('/transport/update-cargo', [API\DamaroController::class, 'update_cargo'])->name('transport.update_cargo');
 
     Route::post('/transports/get', [API\TransportsController::class, 'get'])->name('transports.get');
     Route::post('/transport/file', [API\TransportsController::class, 'file'])->name('transport.file');

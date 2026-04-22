@@ -30,6 +30,20 @@ class Transport extends BaseModel
         'loading',
         'loading_date',
         'visibility',
+        'cargo_vehicle_plate',
+        'cargo_vehicle_description',
+        'cargo_week',
+        'pdf_pin',
+        'loadings_json',
+        'unloadings_json',
+        'distance',
+        'price_per_km',
+        'invoice_type',
+    ];
+
+    protected $casts = [
+        'loadings_json'  => 'array',
+        'unloadings_json' => 'array',
     ];
 
     protected $dates = ['deleted_at', 'paid_at'];
@@ -125,7 +139,7 @@ class Transport extends BaseModel
                                         $q->where(function ($inner) {
                                             $inner->where('bill_sent', 0)->orWhere('docs_sent', 0);
                                         })
-                                        ->whereDate('loading_date', '>', now()->subMonths(2)->startOfDay());
+                                        ->whereDate('loading_date', '>', now()->subMonths(3)->startOfDay());
                                     })
                                     // 2c) Má priradený status – zobraz max 3 mesiace od vytvorenia
                                     ->orWhere(function ($q) {

@@ -46,6 +46,11 @@ Route::middleware(['auth'])->group(function(){
     // Driver Messages (web routes - dopravcovsky system)
     Route::get('/transports/messages/load', [TransportsController::class, 'messages_load'])->name('transports.messages.load');
     Route::post('/transports/messages/send', [TransportsController::class, 'messages_send'])->name('transports.messages.send');
+
+    // Cargo view
+    Route::get('/cargo', [\App\Http\Controllers\CargoController::class, 'index'])->name('cargo.index');
+    Route::get('/cargo/ajax/datatable', [\App\Http\Controllers\CargoController::class, 'ajax_datatable'])->name('cargo.ajax.datatable');
+    Route::get('/cargo/weeks/data', [\App\Http\Controllers\CargoController::class, 'weeks_data'])->name('cargo.weeks.data');
 });
 
 Auth::routes([
