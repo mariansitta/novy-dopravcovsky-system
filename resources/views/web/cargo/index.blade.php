@@ -88,6 +88,7 @@
                                     <td class="font-weight-light pr-2">Suma dopravca: </td>
                                     <td><span class="suma-dopravca font-weight-bold">0</span> &euro;</td>
                                 </tr>
+                                {{--
                                 <tr>
                                     <td class="font-weight-light pr-2">Celkom km: </td>
                                     <td><span class="rozdiel-km font-weight-bold">0</span> km</td>
@@ -96,6 +97,7 @@
                                     <td class="font-weight-light pr-2">Cena za km: </td>
                                     <td><span class="cena-za-km font-weight-bold">0</span></td>
                                 </tr>
+                                --}}
                             </tbody>
                         </table>
                     </div>
@@ -233,8 +235,8 @@ $(document).ready(function () {
                     if (json.summary) {
                         $('#cargo-summary .pocet-objednavok').text(json.summary.count);
                         $('#cargo-summary .suma-dopravca').text(Number(json.summary.total_driver_price).toLocaleString('sk-SK'));
-                        $('#cargo-summary .rozdiel-km').text(Number(json.summary.diff_km).toLocaleString('sk-SK'));
-                        $('#cargo-summary .cena-za-km').text(Number(json.summary.price_per_km).toLocaleString('sk-SK'));
+                        //$('#cargo-summary .rozdiel-km').text(Number(json.summary.diff_km).toLocaleString('sk-SK'));
+                        //$('#cargo-summary .cena-za-km').text(Number(json.summary.price_per_km).toLocaleString('sk-SK'));
                     }
                     return json.data;
                 },
