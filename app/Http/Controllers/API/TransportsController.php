@@ -127,11 +127,59 @@ class TransportsController extends Controller
         ], 200);
     }
 
-    // Update transport status to processed
+    // Update transport status to uploaded (pending) after files are downloaded by Damaro
     public function status(TransportDataRequest $request){
         $transport = Transport::where('transport_id', $request->id)->firstOrFail();
 
         if($transport->bill_sent && $transport->docs_sent){
+            $uploadedStatus = Status::where('slug', 'uploaded')->first();
+            if ($transport->status_id !== $uploadedStatus->id) {
+                $transport->status_id = $uploadedStatus->id;
+                $transport->save();
+            }
+        }
+
+        return response([], 200);
+    }
+
+    // Get all transport_ids still in uploaded (pending) status
+    public function pending(): \Illuminate\Http\JsonResponse
+    {
+        $uploadedStatus = Status::where('slug', 'uploaded')->first();
+
+        $transport_ids = Transport::where('status_id', $uploadedStatus->id)
+            ->whereNotNull('transport_id')
+            ->pluck('transport_id');
+
+        return response()->json(['transports' => $transport_ids]);
+    }
+
+    // Bulk update transport status to processed after received invoices created in Damaro
+    public function invoiced_bulk(Request $request): \Illuminate\Http\Response
+    {
+        $ids = $request->input('ids', []);
+
+        if (empty($ids)) {
+            return response([], 200);
+        }
+
+        $uploadedStatus = Status::where('slug', 'uploaded')->first();
+        $processedStatus = Status::where('slug', 'processed')->first();
+
+        Transport::whereIn('transport_id', $ids)
+            ->where('status_id', $uploadedStatus->id)
+            ->update(['status_id' => $processedStatus->id]);
+
+        return response([], 200);
+    }
+
+    // Update transport status to processed after received invoice is created in Damaro
+    public function invoiced(TransportDataRequest $request){
+        $transport = Transport::where('transport_id', $request->id)->firstOrFail();
+
+        $uploadedStatus = Status::where('slug', 'uploaded')->first();
+
+        if ($transport->status_id === $uploadedStatus->id) {
             $transport->status_id = Status::where('slug', 'processed')->first()->id;
             $transport->save();
         }
@@ -238,6 +286,7 @@ class TransportsController extends Controller
         $transports = Transport::withTrashed()
             ->whereNull('paid_at')
             ->whereNotNull('transport_id')
+            ->where('created_at', '>=', now()->subYear())
             ->select('id', 'transport_id')
             ->get();
 
@@ -248,15 +297,20 @@ class TransportsController extends Controller
     {
         $payments = $request->all();
 
+        $paidStatus = Status::where('slug', 'paid')->first();
+
         $updated = 0;
-        collect($payments)->chunk(500)->each(function ($chunk) use (&$updated) {
+        collect($payments)->chunk(500)->each(function ($chunk) use (&$updated, $paidStatus) {
             foreach ($chunk as $payment) {
                 if (empty($payment['paid_at'])) continue;
 
                 $affected = Transport::withTrashed()
                     ->where('id', $payment['id'])
                     ->whereNull('paid_at')
-                    ->update(['paid_at' => $payment['paid_at']]);
+                    ->update([
+                        'paid_at'   => $payment['paid_at'],
+                        'status_id' => $paidStatus->id,
+                    ]);
 
                 $updated += $affected;
             }

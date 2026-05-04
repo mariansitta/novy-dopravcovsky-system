@@ -21,6 +21,16 @@
 
                     @include('web._partials._alert')
 
+                    @php
+                        $isSk = in_array(strtolower(app()->getLocale()), ['sk', 'cz']);
+                        $statusConfig = [
+                            ''          => ['label' => $isSk ? 'Nový'                 : 'New',       'bg' => '#6c757d', 'color' => '#fff'],
+                            'uploaded'  => ['label' => $isSk ? 'Čaká na spracovanie' : 'Pending',   'bg' => '#f0ad4e', 'color' => '#fff'],
+                            'processed' => ['label' => $isSk ? 'Spracované'           : 'Processed', 'bg' => '#0d6efd', 'color' => '#fff'],
+                            'paid'      => ['label' => $isSk ? 'Uhradené'             : 'Paid',      'bg' => '#28a745', 'color' => '#fff'],
+                        ];
+                    @endphp
+
                     <div class="table-responsive">
                         <table id="datatable" class="table table-bordered dt-responsive nowrap " style="border-collapse: collapse; border-spacing: 0; width: 100%;">
                             <thead>
@@ -64,9 +74,8 @@
                                         </td>
 
                                         <td>
-                                            <span {!! $item->status_slug === 'paid' ? "class='text-success'" : '' !!}>
-                                                {{ $item->status_name ?? '' }}
-                                            </span>
+                                            @php $sCfg = $statusConfig[$item->status_slug ?? ''] ?? $statusConfig['']; @endphp
+                                            <span class="badge" style="background-color: {{ $sCfg['bg'] }}; color: {{ $sCfg['color'] }}; font-size: 0.85rem; padding: 5px 10px;">{{ $item->status_name ?? $sCfg['label'] }}</span>
                                         </td>
 
                                         {{--
@@ -83,41 +92,38 @@
                                             @endif
                                         </td>
 
+                                        @php
+                                            $billFile = $item->files->where('type', 'bill')->sortByDesc('id')->first();
+                                            $docsFile = $item->files->where('type', 'docs')->sortByDesc('id')->first();
+                                        @endphp
+
                                         <td>
-                                            @if($item->bill_file)
-                                                <i class="fas fa-2x fa-check text-success"></i>
+                                            @if($billFile)
+                                                <a
+                                                    class="btn btn-light waves-effect waves-light action-button"
+                                                    title="{{ trans('texts.Received invoice') }}"
+                                                    href="{{ asset($billFile->path . $billFile->filename) }}"
+                                                    target="_blank"
+                                                >
+                                                    <i class="fas fa-file-alt action-icon"></i>
+                                                </a>
                                             @else
-                                                @if($item->bill !== null)
-                                                    <a
-                                                        class="btn btn-light waves-effect waves-light action-button"
-                                                        title="{{ trans('texts.Received invoice') }}"
-                                                        href="{{ asset($item->bill->path . $item->bill->filename) }}"
-                                                        target="_blank"
-                                                    >
-                                                        <i class="fas fa-file-alt action-icon"></i>
-                                                    </a>
-                                                @else
-                                                    <i class="fas fa-2x fa-check fa-times text-danger"></i>
-                                                @endif
+                                                <i class="fas fa-2x fa-times text-danger"></i>
                                             @endif
                                         </td>
 
                                         <td>
-                                            @if($item->docs_file)
-                                                <i class="fas fa-2x fa-check text-success"></i>
+                                            @if($docsFile)
+                                                <a
+                                                    class="btn btn-light waves-effect waves-light action-button"
+                                                    title="{{ trans('texts.Transport documents') }}"
+                                                    href="{{ asset($docsFile->path . $docsFile->filename) }}"
+                                                    target="_blank"
+                                                >
+                                                    <i class="fas fa-car action-icon"></i>
+                                                </a>
                                             @else
-                                                @if($item->docs !== null)
-                                                    <a
-                                                        class="btn btn-light waves-effect waves-light action-button"
-                                                        title="{{ trans('texts.Transport documents') }}"
-                                                        href="{{ asset($item->docs->path . $item->docs->filename) }}"
-                                                        target="_blank"
-                                                    >
-                                                        <i class="fas fa-car action-icon"></i>
-                                                    </a>
-                                                @else
-                                                    <i class="fas fa-2x fa-check fa-times text-danger"></i>
-                                                @endif
+                                                <i class="fas fa-2x fa-times text-danger"></i>
                                             @endif
                                         </td>
 
@@ -139,6 +145,31 @@
                             </tbody>
                         </table>
                     </div>
+
+                    @php
+                        $statusDescriptions = [
+                            ''          => $isSk ? 'Transport bol pridelený, dokumenty ešte neboli nahrané.'           : 'Transport assigned, no documents uploaded yet.',
+                            'uploaded'  => $isSk ? 'Dokumenty boli nahrané a čakajú na spracovanie v Damaro.'          : 'Documents uploaded, waiting to be processed by Damaro.',
+                            'processed' => $isSk ? 'Doklady boli prijaté a spracované.'                               : 'Documents have been received and processed.',
+                            'paid'      => $isSk ? 'Faktúra bola uhradená.'                                            : 'Invoice has been paid.',
+                        ];
+                    @endphp
+                    <div class="mt-4 pt-3" style="border-top: 1px solid #e9ecef;">
+                        <p class="text-muted mb-2" style="font-size: 0.8rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase;">
+                            {{ $isSk ? 'Legenda stavov' : 'Status legend' }}
+                        </p>
+                        <table style="border-collapse: separate; border-spacing: 0 6px;">
+                            @foreach($statusConfig as $slug => $cfg)
+                                <tr>
+                                    <td style="padding-right: 16px; white-space: nowrap;">
+                                        <span class="badge" style="background-color: {{ $cfg['bg'] }}; color: {{ $cfg['color'] }}; font-size: 0.85rem; padding: 5px 10px; min-width: 160px; display: inline-block; text-align: center;">{{ $cfg['label'] }}</span>
+                                    </td>
+                                    <td style="font-size: 0.85rem; color: #6c757d;">{{ $statusDescriptions[$slug] }}</td>
+                                </tr>
+                            @endforeach
+                        </table>
+                    </div>
+
                 </div>
             </div>
 

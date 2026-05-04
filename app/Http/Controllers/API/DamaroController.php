@@ -188,6 +188,9 @@ class DamaroController extends Controller
         $transport = Transport::where('transport_id', $request->id)->firstOrFail();
 
         $transport->status_id = Status::where('slug', 'paid')->first()->id;
+        if ($request->paid_at && is_null($transport->paid_at)) {
+            $transport->paid_at = $request->paid_at;
+        }
         $transport->save();
 
         return response([], 200);

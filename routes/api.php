@@ -41,6 +41,9 @@ Route::middleware(['api_key'])->group(function (){
     Route::post('/transport/file/success', [API\TransportsController::class, 'success'])->name('transport.success');
     Route::post('/transport/data', [API\TransportsController::class, 'data'])->name('transport.data');
     Route::post('/transport/status', [API\TransportsController::class, 'status'])->name('transport.status');
+    Route::post('/transport/invoiced', [API\TransportsController::class, 'invoiced'])->name('transport.invoiced');
+    Route::post('/transports/pending', [API\TransportsController::class, 'pending'])->name('transports.pending');
+    Route::post('/transports/invoiced/bulk', [API\TransportsController::class, 'invoiced_bulk'])->name('transports.invoiced_bulk');
     Route::post('/transport/exists', [API\TransportsController::class, 'exists'])->name('transport.exists');
     Route::post('/transport/bill-delete', [API\TransportsController::class, 'bill_delete'])->name('transport.bill_delete');
     Route::post('/transport/docs-delete', [API\TransportsController::class, 'docs_delete'])->name('transport.docs_delete');

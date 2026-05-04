@@ -28,7 +28,7 @@ class TransportsController extends Admin\AdminController
         $table = Transport::with([
                 'status',
                 'transport_status',
-                'files' => fn($q) => $q->whereNull('deleted_at')
+                'files' => fn($q) => $q->withTrashed()->orderByDesc('id'),
             ])
             ->where('user_id', auth()->user()->id)
             ->visible()
