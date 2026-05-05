@@ -57,35 +57,34 @@ class DamaroController extends Controller
         if (!$transport) {
             $transport = $user->transports()->create($request->transport);
         } else {
-            
-            $this->delete_files($transport->files);
 
-            /*
-            foreach ($transport->files as $file) {
-                unlink($file->path . $file->filename);
-                $file->delete();
-            }
-            */
+            //$this->delete_files($transport->files);
 
             if ($transport->trashed()) {
                 $transport->restore();
             }
-            
+
             if (isset($request->transport['bill_file'])) {
+                $this->delete_files($transport->files->where('type', 'bill'));
                 $transport->bill_sent = 1;
                 $transport->bill_file = $request->transport['bill_file'];
-            } else {
+            } elseif ($transport->bill_sent) {
+                $this->delete_files($transport->files->where('type', 'bill'));
                 $transport->bill_sent = 0;
                 $transport->bill_file = null;
             }
-            
+            // bill_sent = 0 a bez bill_file = súbor čaká na stiahnutie, nemaž ho
+
             if (isset($request->transport['docs_file'])) {
+                $this->delete_files($transport->files->where('type', 'docs'));
                 $transport->docs_sent = 1;
                 $transport->docs_file = $request->transport['docs_file'];
-            } else {
+            } elseif ($transport->docs_sent) {
+                $this->delete_files($transport->files->where('type', 'docs'));
                 $transport->docs_sent = 0;
                 $transport->docs_file = null;
             }
+            // docs_sent = 0 a bez docs_file = súbor čaká na stiahnutie, nemaž ho
 
             /* update */
             $user = User::where('driver_id', $request->driver['driver_id'])->first();
