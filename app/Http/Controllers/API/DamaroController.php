@@ -220,6 +220,9 @@ class DamaroController extends Controller
     // Modify driver_notice of transport
     public function modify_driver_notice(ModifyDriverNoticeRequest $request) {
         $transport = Transport::withTrashed()->where('transport_id', $request->id)->firstOrFail();
+        $uploadedStatus = Status::where('slug', 'uploaded')->first();
+        $paidStatus = Status::where('slug', 'paid')->first();
+
         if (isset($request->driver_notice)) {
             $sendemail = false;
 
@@ -227,6 +230,10 @@ class DamaroController extends Controller
                 $sendemail = true;
             }
             $transport->driver_notice = $request->driver_notice;
+
+            if ($transport->status_id !== $paidStatus->id) {
+                $transport->status_id = $uploadedStatus->id;
+            }
 
             if ($sendemail && isset($transport->user->notify_email)) {
 

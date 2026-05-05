@@ -284,7 +284,7 @@ class TransportsController extends Controller
     public function unpaid()
     {
         $transports = Transport::withTrashed()
-            ->whereNull('paid_at')
+            ->where(fn($q) => $q->whereNull('paid_at')->orWhere('status_id', '!=', 3))
             ->whereNotNull('transport_id')
             ->where('created_at', '>=', now()->subYear())
             ->select('id', 'transport_id')
@@ -306,7 +306,6 @@ class TransportsController extends Controller
 
                 $affected = Transport::withTrashed()
                     ->where('id', $payment['id'])
-                    ->whereNull('paid_at')
                     ->update([
                         'paid_at'   => $payment['paid_at'],
                         'status_id' => $paidStatus->id,
