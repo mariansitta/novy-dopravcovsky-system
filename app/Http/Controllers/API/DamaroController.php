@@ -230,7 +230,7 @@ class DamaroController extends Controller
             }
             $transport->driver_notice = $request->driver_notice;
 
-            if ($transport->status_id !== $paidStatus->id) {
+            if ($transport->status_id !== $paidStatus->id && ($transport->bill_sent || $transport->docs_sent)) {
                 $transport->status_id = $uploadedStatus->id;
             }
 
