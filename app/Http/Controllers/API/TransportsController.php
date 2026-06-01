@@ -329,6 +329,64 @@ class TransportsController extends Controller
         return response()->json(['transports' => $transports]);
     }
 
+    public function byStatus(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $slugs = $request->input('statuses', []);
+
+        if (empty($slugs)) {
+            return response()->json(['transports' => []]);
+        }
+
+        $statusIds = Status::whereIn('slug', $slugs)->pluck('id', 'slug');
+
+        $result = [];
+        foreach ($slugs as $slug) {
+            if (!isset($statusIds[$slug])) continue;
+
+            $result[$slug] = Transport::withTrashed()
+                ->where('status_id', $statusIds[$slug])
+                ->whereNotNull('transport_id')
+                ->pluck('transport_id')
+                ->toArray();
+        }
+
+        return response()->json(['transports' => $result]);
+    }
+
+    public function setStatusBulk(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $updates = $request->input('updates', []);
+
+        if (empty($updates)) {
+            return response()->json(['updated' => 0]);
+        }
+
+        $statusCache = [];
+        $updated = 0;
+
+        foreach ($updates as $item) {
+            $slug = $item['status'] ?? null;
+            $transportId = $item['id'] ?? null;
+
+            if (!$slug || !$transportId) continue;
+
+            if (!isset($statusCache[$slug])) {
+                $statusCache[$slug] = Status::where('slug', $slug)->value('id');
+            }
+
+            $statusId = $statusCache[$slug];
+            if (!$statusId) continue;
+
+            $affected = Transport::withTrashed()
+                ->where('transport_id', $transportId)
+                ->update(['status_id' => $statusId]);
+
+            $updated += $affected;
+        }
+
+        return response()->json(['updated' => $updated]);
+    }
+
     // Set visibility for transport: null = normálna logika, 'hidden' = vždy skryť, 'visible' = vždy zobraziť
     public function set_visibility(Request $request)
     {

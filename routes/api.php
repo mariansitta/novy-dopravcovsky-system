@@ -54,6 +54,10 @@ Route::middleware(['api_key'])->group(function (){
     Route::post('/transports/unpaid', [API\TransportsController::class, 'unpaid'])->name('transports.unpaid');
     Route::post('/transports/sync-payments', [API\TransportsController::class, 'sync'])->name('transports.sync_payments');
 
+    // Status sync
+    Route::post('/transports/by-status', [API\TransportsController::class, 'byStatus'])->name('transports.by_status');
+    Route::post('/transports/set-status/bulk', [API\TransportsController::class, 'setStatusBulk'])->name('transports.set_status_bulk');
+
     // Driver Messages
     Route::post('/driver-messages/get', [API\DriverMessagesController::class, 'get'])->name('driver_messages.get');
     Route::post('/driver-messages/mark-synced', [API\DriverMessagesController::class, 'mark_synced'])->name('driver_messages.mark_synced');
