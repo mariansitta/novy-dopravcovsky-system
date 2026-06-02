@@ -341,6 +341,15 @@ class TransportsController extends Controller
 
         $result = [];
         foreach ($slugs as $slug) {
+            if ($slug === 'none') {
+                $result['none'] = Transport::withTrashed()
+                    ->whereNull('status_id')
+                    ->whereNotNull('transport_id')
+                    ->pluck('transport_id')
+                    ->toArray();
+                continue;
+            }
+
             if (!isset($statusIds[$slug])) continue;
 
             $result[$slug] = Transport::withTrashed()
@@ -351,6 +360,27 @@ class TransportsController extends Controller
         }
 
         return response()->json(['transports' => $result]);
+    }
+
+    public function withUnsentFiles(): \Illuminate\Http\JsonResponse
+    {
+        $transports = Transport::withTrashed()
+            ->whereNotNull('transport_id')
+            ->whereNull('status_id')
+            ->where(fn($q) => $q->where('bill_sent', 0)->orWhere('docs_sent', 0))
+            ->whereHas('files', fn($q) => $q->whereIn('type', ['bill', 'docs'])->where('created_at', '<', now()->subDay()))
+            ->with(['files' => fn($q) => $q->whereIn('type', ['bill', 'docs'])->where('created_at', '<', now()->subDay())])
+            ->get()
+            ->map(fn($t) => [
+                'transport_id' => (int) $t->transport_id,
+                'has_bill'     => $t->files->where('type', 'bill')->isNotEmpty() && !$t->bill_sent,
+                'has_docs'     => $t->files->where('type', 'docs')->isNotEmpty() && !$t->docs_sent,
+                'uploaded_at'  => $t->files->min('created_at'),
+            ])
+            ->filter(fn($item) => $item['has_bill'] || $item['has_docs'])
+            ->values();
+
+        return response()->json(['transports' => $transports]);
     }
 
     public function setStatusBulk(Request $request): \Illuminate\Http\JsonResponse
@@ -371,15 +401,20 @@ class TransportsController extends Controller
             if (!$slug || !$transportId) continue;
 
             if (!isset($statusCache[$slug])) {
-                $statusCache[$slug] = Status::where('slug', $slug)->value('id');
+                $statusCache[$slug] = Status::on('mysql')->where('slug', $slug)->value('id');
             }
 
             $statusId = $statusCache[$slug];
             if (!$statusId) continue;
 
-            $affected = Transport::withTrashed()
+            $data = ['status_id' => $statusId];
+            if (!empty($item['paid_at'])) {
+                $data['paid_at'] = $item['paid_at'];
+            }
+
+            $affected = Transport::on('mysql')->withTrashed()
                 ->where('transport_id', $transportId)
-                ->update(['status_id' => $statusId]);
+                ->update($data);
 
             $updated += $affected;
         }

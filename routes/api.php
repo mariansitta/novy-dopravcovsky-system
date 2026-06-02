@@ -57,6 +57,7 @@ Route::middleware(['api_key'])->group(function (){
     // Status sync
     Route::post('/transports/by-status', [API\TransportsController::class, 'byStatus'])->name('transports.by_status');
     Route::post('/transports/set-status/bulk', [API\TransportsController::class, 'setStatusBulk'])->name('transports.set_status_bulk');
+    Route::post('/transports/with-unsent-files', [API\TransportsController::class, 'withUnsentFiles'])->name('transports.with_unsent_files');
 
     // Driver Messages
     Route::post('/driver-messages/get', [API\DriverMessagesController::class, 'get'])->name('driver_messages.get');
