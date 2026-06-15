@@ -39,6 +39,7 @@ class Transport extends BaseModel
         'distance',
         'price_per_km',
         'invoice_type',
+        'company_id',
     ];
 
     protected $casts = [
@@ -50,6 +51,10 @@ class Transport extends BaseModel
 
     public function user(){
         return $this->belongsTo(User::class);
+    }
+
+    public function company(){
+        return $this->belongsTo(Company::class);
     }
 
     public function files(){

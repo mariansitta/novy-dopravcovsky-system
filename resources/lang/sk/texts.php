@@ -5,6 +5,13 @@
 
 return [
     'Drivers system' => 'Systém pre dopravcov',
+
+    // AI kontrola dokladov
+    'ai-check-title' => 'Skontrolujte nahrané doklady',
+    'ai-check-hint'  => 'Toto je iba upozornenie z automatickej kontroly – môže sa mýliť. Ak ste si istí, že sú doklady správne, môžete ich aj tak uložiť.',
+    'ai-check-loading' => 'Kontrolujem doklad…',
+    'ai-check-ok' => 'Kontrola prebehla v poriadku.',
+
     'Tags' => 'Tagy',
     'Email successfully updated' => 'Email úspešne zmenený',
     'Password successfully updated' => 'Heslo úspešne zmenene',

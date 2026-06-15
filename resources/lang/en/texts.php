@@ -5,6 +5,13 @@
 
 return [
     'Drivers system' => 'Drivers system',
+
+    // AI document check
+    'ai-check-title' => 'Please review the uploaded documents',
+    'ai-check-hint'  => 'This is only a warning from an automated check – it may be wrong. If you are sure the documents are correct, you can save them anyway.',
+    'ai-check-loading' => 'Checking document…',
+    'ai-check-ok' => 'Check passed — documents look correct.',
+
     'Tags' => 'Tags',
     'Forgot password' => 'Forgot password',
     'Register new' => 'Create new account',

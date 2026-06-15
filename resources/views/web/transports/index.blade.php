@@ -93,8 +93,21 @@
                                         </td>
 
                                         @php
-                                            $billFile = $item->files->where('type', 'bill')->sortByDesc('id')->first();
-                                            $docsFile = $item->files->where('type', 'docs')->sortByDesc('id')->first();
+                                            // Živé (nezmazané) súbory – reálne nahraté doklady.
+                                            $billLive = $item->files->whereNull('deleted_at')->where('type', 'bill')->sortByDesc('id')->first();
+                                            $docsLive = $item->files->whereNull('deleted_at')->where('type', 'docs')->sortByDesc('id')->first();
+
+                                            // Vrátane zmazaných – pri transportoch s priradeným statusom Damaro
+                                            // doklady stiahne a vymaže, ale dopravca má stále vidieť, že tam boli.
+                                            $billAny = $item->files->where('type', 'bill')->sortByDesc('id')->first();
+                                            $docsAny = $item->files->where('type', 'docs')->sortByDesc('id')->first();
+
+                                            // Červené X (chýbajúci doklad) len pri úplne novom transporte bez statusu.
+                                            // Akýkoľvek priradený status => zobraz ikonku aj zo zmazaného dokladu.
+                                            $hasStatus = $item->status_id !== null;
+
+                                            $billFile = $billLive ?: ($hasStatus ? $billAny : null);
+                                            $docsFile = $docsLive ?: ($hasStatus ? $docsAny : null);
                                         @endphp
 
                                         <td>

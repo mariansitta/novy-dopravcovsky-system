@@ -39,6 +39,7 @@ class DocumentsRequestedRequest extends FormRequest
             'transport.ldm' => 'required|string|max:255','driver_price',
             'transport.bill_file' => 'nullable|string|max:255',
             'transport.docs_file' => 'nullable|string|max:255',
+            'transport.company_id' => 'nullable|integer',
 
             'driver' => 'required|array',
             'driver.driver_id' => 'required|integer',

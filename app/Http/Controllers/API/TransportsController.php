@@ -422,6 +422,36 @@ class TransportsController extends Controller
         return response()->json(['updated' => $updated]);
     }
 
+    // Bulk priradenie fakturačnej firmy k transportom (z Damara).
+    // Payload: ['updates' => [['id' => transport_id, 'company_id' => 123|null], ...]]
+    // Používa sa pri AI kontrole nahrávaných faktúr (firma + DPH logika).
+    public function setCompanyBulk(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $updates = $request->input('updates', []);
+
+        if (empty($updates)) {
+            return response()->json(['updated' => 0]);
+        }
+
+        $updated = 0;
+
+        foreach ($updates as $item) {
+            $transportId = $item['id'] ?? null;
+            if (!$transportId) continue;
+
+            $companyId = $item['company_id'] ?? null;
+            $companyId = $companyId !== null && $companyId !== '' ? (int) $companyId : null;
+
+            $affected = Transport::on('mysql')->withTrashed()
+                ->where('transport_id', $transportId)
+                ->update(['company_id' => $companyId]);
+
+            $updated += $affected;
+        }
+
+        return response()->json(['updated' => $updated]);
+    }
+
     // Set visibility for transport: null = normálna logika, 'hidden' = vždy skryť, 'visible' = vždy zobraziť
     public function set_visibility(Request $request)
     {

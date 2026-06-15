@@ -12,6 +12,7 @@ use App\Models\DriverMessage;
 use App\Models\Status;
 use App\Models\Transport;
 use App\Models\TransportStatus;
+use App\Services\DocumentUploadChecker;
 use App\Traits\UploadTrait;
 use Illuminate\Support\Facades\DB;
 use App\Models\User;
@@ -22,6 +23,18 @@ use Illuminate\Http\Request;
 class TransportsController extends Admin\AdminController
 {
     use UploadTrait;
+
+    // DOČASNÉ (testovanie): AI kontrola dokladov beží len pre týchto dopravcov.
+    // Po otestovaní celý tento blok + jeho použitia (guard v check_document a
+    // podmienka data-check-url v _modal.blade.php) zmazať / zapnúť plošne.
+    // Damaro, SANIJOTRANS
+    //private const AI_DOC_CHECK_DRIVER_IDS = [1271, 4560];
+    private const AI_DOC_CHECK_DRIVER_IDS = [1271];
+
+    public static function aiDocCheckEnabledForDriver(?int $driverId): bool
+    {
+        return $driverId !== null && in_array($driverId, self::AI_DOC_CHECK_DRIVER_IDS, true);
+    }
 
     public function index()
     {
@@ -129,11 +142,10 @@ class TransportsController extends Admin\AdminController
             return redirect()->route('index');
         }
 
-        $status = Status::where('slug', 'uploaded')->first();
-        $transport->status_id = $status->id;
         $filename = $this->upload_file($request, 'bill', 'transports', $transport, 'bill');
         $transport->bill_file = $filename;
         $transport->bill_sent = 0;
+        $transport->status_id = $this->resolveUploadStatusId($transport);
 
         $transport->due_date = now()->addDays($transport->due_days);
         $transport->save();
@@ -150,11 +162,10 @@ class TransportsController extends Admin\AdminController
             return redirect()->route('index');
         }
 
-        $status = Status::where('slug', 'uploaded')->first();
-        $transport->status_id = $status->id;
         $filename = $this->upload_file($request, 'docs', 'transports', $transport, 'docs');
         $transport->docs_file = $filename;
         $transport->docs_sent = 0;
+        $transport->status_id = $this->resolveUploadStatusId($transport);
 
         $transport->due_date = now()->addDays($transport->due_days);
         $transport->save();
@@ -171,10 +182,9 @@ class TransportsController extends Admin\AdminController
             return redirect()->route('index');
         }
 
-        $status = Status::where('slug', 'uploaded')->first();
-        $transport->status_id = $status->id;
         $this->upload_file($request, 'bill', 'transports', $transport, 'bill');
         $this->upload_file($request, 'docs', 'transports', $transport, 'docs');
+        $transport->status_id = $this->resolveUploadStatusId($transport);
 
         $transport->due_date = now()->addDays($transport->due_days);
         $transport->save();
@@ -243,14 +253,93 @@ class TransportsController extends Admin\AdminController
         }
     }
     
+    // AJAX kontrola nahrávaných dokladov cez AI pred uložením.
+    // Súbory sa NEukladajú – kontroluje sa priamo dočasný upload z requestu.
+    public function check_document(Request $request, $id, DocumentUploadChecker $checker) {
+        $request->validate([
+            'bill' => 'nullable|file|mimes:pdf',
+            'docs' => 'nullable|file|mimes:pdf',
+        ]);
+
+        $transport = Transport::with(['user', 'company'])->find($id);
+
+        if (!$transport) {
+            return response()->json(['ok' => true, 'warnings' => []]);
+        }
+
+        // DOČASNÉ: AI kontrola len pre povolených dopravcov (whitelist hore v triede).
+        if (!self::aiDocCheckEnabledForDriver($transport->user?->driver_id)) {
+            return response()->json(['ok' => true, 'warnings' => []]);
+        }
+
+        $warnings = [];
+        $results = [];
+
+        foreach (['bill', 'docs'] as $slot) {
+            if (!$request->hasFile($slot)) {
+                continue;
+            }
+
+            $result = $checker->check($request->file($slot), $slot, $transport);
+            $warnings = array_merge($warnings, $result['warnings']);
+
+            // checked = AI kontrola reálne prebehla (nebola preskočená).
+            // Frontend podľa toho rozlíši zelené OK (checked, 0 varovaní) od skipnutia.
+            $results[$slot] = [
+                'checked' => !($result['skipped'] ?? false),
+                'warnings' => $result['warnings'],
+            ];
+        }
+
+        $ok = collect($warnings)->where('severity', 'warning')->isEmpty();
+
+        return response()->json([
+            'ok' => $ok,
+            'warnings' => $warnings, // spätná kompatibilita
+            'results' => $results,
+        ]);
+    }
+
     public function document_delete(DeleteDocumentRequest $request, $id){
         $transport = Transport::findOrFail($id);
 
         $transport->files()->where('type', $request->column)->delete();
 
+        // Vyčisti príslušný *_file/*_sent stĺpec na transporte.
+        if ($request->column === 'bill') {
+            $transport->bill_file = null;
+            $transport->bill_sent = 0;
+        } else {
+            $transport->docs_file = null;
+            $transport->docs_sent = 0;
+        }
+
+        // Status "Čaká na spracovanie" platí len keď sú nahraté OBA doklady.
+        // Po vymazaní jedného sa transport vráti do pôvodného stavu (bez statusu).
+        $transport->status_id = $this->resolveUploadStatusId($transport);
+
+        $transport->save();
+
         $this->_setFlashMessage($request, 'success', "Dokument bol úspešne vymazaný.");
 
         return redirect()->route('index');
+    }
+
+    /**
+     * Status "Čaká na spracovanie" (uploaded) platí len ak má transport nahraté
+     * OBA doklady (faktúru aj prepravné dokumenty). Inak sa vráti na null
+     * (pôvodný stav – čaká sa na dodanie oboch dokladov).
+     */
+    private function resolveUploadStatusId(Transport $transport): ?int
+    {
+        $hasBill = $transport->files()->where('type', 'bill')->exists();
+        $hasDocs = $transport->files()->where('type', 'docs')->exists();
+
+        if ($hasBill && $hasDocs) {
+            return Status::where('slug', 'uploaded')->value('id');
+        }
+
+        return null;
     }
 
     public function _table() {

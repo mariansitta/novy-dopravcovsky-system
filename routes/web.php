@@ -35,6 +35,7 @@ Route::middleware(['auth'])->group(function(){
     Route::post('/transports/bill_document/{id}', [TransportsController::class, 'bill_document'])->name('transports.bill_document');
     Route::post('/transports/doc_document/{id}', [TransportsController::class, 'doc_document'])->name('transports.doc_document');
     Route::post('/transports/documents/{id}', [TransportsController::class, 'documents'])->name('transports.documents');
+    Route::post('/transports/check-document/{id}', [TransportsController::class, 'check_document'])->name('transports.check_document');
     Route::post('/transports/document/delete/{id}', [ TransportsController::class, 'document_delete' ])->name('transports.document_delete');
     Route::get('/transports/edit/{id}', [TransportsController::class, 'edit'])->name('transports.edit');
     Route::get('/transports/bill/{id}', [TransportsController::class, 'bill'])->name('transports.bill');

@@ -31,7 +31,7 @@
 
                         </div>
 
-                        <form action="{{ route('transports.documents', $transport->id) }}" method="post" enctype="multipart/form-data">
+                        <form id="documents-form" action="{{ route('transports.documents', $transport->id) }}" method="post" enctype="multipart/form-data" @if(\App\Http\Controllers\TransportsController::aiDocCheckEnabledForDriver($transport->user?->driver_id)) data-check-url="{{ route('transports.check_document', $transport->id) }}" @endif>
                             @csrf
 
                             <div class="row">
@@ -40,6 +40,19 @@
                                     <div class="form-group">
                                         <input name="bill" type="file" class="form-control filestyle" data-buttonname="btn-secondary" data-buttonText="{{ trans('texts.Upload file') }}">
                                         @include('web._partials._errors', ['column' => "bill"])
+                                    </div>
+
+                                    {{-- AI kontrola – varovania pre faktúru --}}
+                                    <div class="ai-check-loading text-muted small mt-2" data-slot="bill" style="display:none;">
+                                        <i class="fas fa-spinner fa-spin"></i> {{ trans('texts.ai-check-loading') }}
+                                    </div>
+                                    <div class="ai-check-ok alert alert-success mt-2 mb-0" data-slot="bill" style="display:none;">
+                                        <i class="fas fa-check-circle"></i> {{ trans('texts.ai-check-ok') }}
+                                    </div>
+                                    <div class="ai-check-box alert alert-warning mt-2" data-slot="bill" style="display:none;">
+                                        <h6 class="mb-2"><i class="fas fa-exclamation-triangle"></i> {{ trans('texts.ai-check-title') }}</h6>
+                                        <ul class="ai-check-list mb-2"></ul>
+                                        <p class="mb-0 small">{{ trans('texts.ai-check-hint') }}</p>
                                     </div>
                                     @else
                                         <div>{{ trans('texts.docs-uploaded') }}</div>
@@ -71,6 +84,19 @@
                                     <div class="form-group">
                                         <input name="docs" type="file" class="form-control filestyle" data-buttonname="btn-secondary" data-buttonText="{{ trans('texts.Upload file') }}">
                                         @include('web._partials._errors', ['column' => "docs"])
+                                    </div>
+
+                                    {{-- AI kontrola – varovania pre prepravné dokumenty --}}
+                                    <div class="ai-check-loading text-muted small mt-2" data-slot="docs" style="display:none;">
+                                        <i class="fas fa-spinner fa-spin"></i> {{ trans('texts.ai-check-loading') }}
+                                    </div>
+                                    <div class="ai-check-ok alert alert-success mt-2 mb-0" data-slot="docs" style="display:none;">
+                                        <i class="fas fa-check-circle"></i> {{ trans('texts.ai-check-ok') }}
+                                    </div>
+                                    <div class="ai-check-box alert alert-warning mt-2" data-slot="docs" style="display:none;">
+                                        <h6 class="mb-2"><i class="fas fa-exclamation-triangle"></i> {{ trans('texts.ai-check-title') }}</h6>
+                                        <ul class="ai-check-list mb-2"></ul>
+                                        <p class="mb-0 small">{{ trans('texts.ai-check-hint') }}</p>
                                     </div>
                                     @else
                                         <div>{{ trans('texts.docs-uploaded') }}</div>

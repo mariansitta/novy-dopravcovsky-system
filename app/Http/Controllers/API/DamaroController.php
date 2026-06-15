@@ -127,6 +127,10 @@ class DamaroController extends Controller
 
             $transport->invoice_type = $request->transport['invoice_type'] ?? null;
 
+            if (array_key_exists('company_id', $request->transport)) {
+                $transport->company_id = $request->transport['company_id'] ?: null;
+            }
+
             $transport->save();
         }
 
