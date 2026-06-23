@@ -90,7 +90,7 @@ return [
     'transport-status-success-alert' => 'Stav prepravy bol zmenený.',
     'bill-uploaded' => 'Prijatá faktúra je úspešne nahratá.',
     'docs-uploaded' => 'Prepravné dokumenty sú úspešne nahraté.',
-    'notify-email' => 'Email pre upozornenia',
+    'notify-email' => 'Váš email pre upozornenia',
 
     'email' => [
         'notify-text-1' => 'Vážený dopravca, pri spracovávaní Vašej faktúry a prepravných dokladov k objednávke č. ',

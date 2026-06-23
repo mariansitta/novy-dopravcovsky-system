@@ -86,7 +86,7 @@ return [
     'transport-status-success-alert' => 'Transport status was changed.',
     'bill-uploaded' => 'Received invoice is successfully uploaded.',
     'docs-uploaded' => 'Transport documents are successfully uploaded.',
-    'notify-email' => 'Notify email',
+    'notify-email' => 'Your notify email',
 
     'email' => [
         'notify-text-1' => 'Dear carrier, there was an issue processing your invoice and transport documents for order no. ',
