@@ -34,7 +34,7 @@ class DocumentUploadChecker
 
     /**
      * @param  string  $slot  'bill' (faktúra) alebo 'docs' (dopravné dokumenty)
-     * @return array{ok: bool, skipped: bool, warnings: array<int, array{slot: string, severity: string, message: string}>, raw?: array}
+     * @return array{ok: bool, skipped: bool, warnings: array<int, array{slot: string, severity: string, message: string}>, raw?: array, meta?: array}
      */
     public function check(UploadedFile $file, string $slot, Transport $transport): array
     {
@@ -56,8 +56,17 @@ class DocumentUploadChecker
             return $this->skipped($slot);
         }
 
+        // Metadáta analýzy (čas, použitý model, eskalácia) na uloženie/prenos.
+        $meta = [
+            'model_used' => null,
+            'escalated' => false,
+            'duration_ms' => 0,
+            'original_filename' => $file->getClientOriginalName() ?: null,
+        ];
+
+        $startedAt = hrtime(true);
         try {
-            $data = $this->analyzeWithFallback($file, $slot, $transport, $config);
+            $data = $this->analyzeWithFallback($file, $slot, $transport, $config, $meta);
         } catch (\Throwable $e) {
             Log::warning('AI doc check failed, skipping', [
                 'transport_id' => $transport->id,
@@ -67,6 +76,7 @@ class DocumentUploadChecker
 
             return $this->skipped($slot);
         }
+        $meta['duration_ms'] = (int) round((hrtime(true) - $startedAt) / 1_000_000);
 
         $warnings = $this->buildWarnings($data, $slot, $transport);
 
@@ -75,6 +85,7 @@ class DocumentUploadChecker
             'skipped' => false,
             'warnings' => $warnings,
             'raw' => $data,
+            'meta' => $meta,
         ];
     }
 
@@ -83,15 +94,22 @@ class DocumentUploadChecker
         return ['ok' => true, 'skipped' => true, 'warnings' => []];
     }
 
-    private function analyzeWithFallback(UploadedFile $file, string $slot, Transport $transport, array $config): array
+    /**
+     * @param  array  $meta  out-param: doplní 'model_used' a 'escalated' podľa toho,
+     *                        ktorá vetva (primary/secondary) dala finálny výsledok.
+     */
+    private function analyzeWithFallback(UploadedFile $file, string $slot, Transport $transport, array $config, array &$meta = []): array
     {
         $openAiFileId = $this->uploadFile($file, $config);
 
         $primary = $this->analyze($openAiFileId, $slot, $transport, $config['primary_model'], $config);
+        $meta['model_used'] = $config['primary_model'];
 
         $confidence = $primary['confidence'] ?? 0;
         if ($config['primary_model'] !== $config['secondary_model']
             && $confidence < (float) $config['escalation_confidence']) {
+            $meta['model_used'] = $config['secondary_model'];
+            $meta['escalated'] = true;
             return $this->analyze($openAiFileId, $slot, $transport, $config['secondary_model'], $config);
         }
 
@@ -181,7 +199,10 @@ class DocumentUploadChecker
             'Slot meaning: the carrier intended this file to be a ' . $expectedType . '.',
             'Read the PDF (it may be scanned or photographed). Do not invent values.',
             'Decide whether the document actually matches the intended slot.',
-            'Always assess readability/quality of the PDF.',
+            'Assess readability of the PDF. Set readable = false ONLY when the content genuinely cannot be read'
+                . ' (heavily blurred, cut off, blank, or corrupted so key fields are illegible). If you were able to'
+                . ' read the document type and the relevant fields (e.g. amounts, company, IČO), then readable = true'
+                . ' – minor scan noise, slight skew, watermarks or "photographed" look are NOT reasons to set readable = false.',
             'IMPORTANT: Do NOT report positive findings, confirmations, or "unknown"/uncertain results as issues.'
                 . ' The issues[] array must contain ONLY clear, actionable problems the carrier should fix.'
                 . ' If something is correct or cannot be determined, leave it out of issues[].',
@@ -209,6 +230,7 @@ class DocumentUploadChecker
                 $lines[] = '    * Do NOT base the match on the company name or the word "SLOVAKIA"/"CZ" in the name. Related group companies share the same name and differ only by IČO / country.';
                 $lines[] = '    * Treat country names and codes as equivalent: CESKO = Česko = CZ; SLOVENSKO = Slovensko = SK. A different wording of the same country is NOT a mismatch.';
                 $lines[] = '  Always fill invoice_billed_to_ico, invoice_billed_to_city and invoice_billed_to_country with what is actually on the invoice (recipient), so the difference can be shown.';
+                $lines[] = '  MANDATORY: read the recipient IČO from the invoice and put the digits into invoice_billed_to_ico. It is almost always printed near the recipient (labelled "IČO"). Never leave invoice_billed_to_ico empty if any IČO is visible for the recipient; ignore spaces when reading it.';
             } else {
                 $lines[] = '- The expected billing company is unknown; set company_matches_expected = "unknown".';
             }
@@ -359,7 +381,13 @@ class DocumentUploadChecker
         }
 
         // 2) Čitateľnosť
-        if (($data['readable'] ?? true) === false) {
+        // Deterministická poistka proti falošnému readable=false: ak AI z dokumentu
+        // reálne vyčítala kľúčové údaje (typ dokumentu, sumu, IČO odberateľa), doklad
+        // je preukázateľne čitateľný a hlášku o nečitateľnosti nedávame – aj keby AI
+        // omylom vrátila readable=false kvôli kozmetickej kvalite skenu.
+        $readableFalse = ($data['readable'] ?? true) === false;
+        $readData = $this->readableEvidence($data);
+        if ($readableFalse && !$readData) {
             $note = trim((string) ($data['readability_note'] ?? ''));
             $add(
                 'warning',
@@ -379,15 +407,23 @@ class DocumentUploadChecker
             $vatMismatch = ($data['vat_matches_expected'] ?? 'unknown') === 'mismatch';
 
             // Deterministická poistka: IČO je rozhodujúci identifikátor. Ak IČO na
-            // faktúre sedí s očakávaným IČO firmy, je to tá istá firma – aj keby AI
-            // omylom vrátilo mismatch (napr. kvôli "SLOVAKIA" v názve / "CESKO" vs "CZ").
+            // faktúre sedí s očakávaným IČO firmy, je to preukázateľne tá istá firma –
+            // aj keby AI omylom vrátilo mismatch (napr. kvôli "SLOVAKIA" v názve /
+            // "CESKO" vs "CZ" / "BRNO" vs "BRNO - ŠTÝŘICE").
             $expectedIcoDigits = preg_replace('/\D+/', '', (string) ($transport->company->ico ?? ''));
             $foundIcoDigits = preg_replace('/\D+/', '', (string) ($data['invoice_billed_to_ico'] ?? ''));
-            if ($companyMismatch && $expectedIcoDigits !== '' && $expectedIcoDigits === $foundIcoDigits) {
+            $icoConfirmedMatch = $expectedIcoDigits !== '' && $expectedIcoDigits === $foundIcoDigits;
+            if ($companyMismatch && $icoConfirmedMatch) {
                 $companyMismatch = false;
             }
 
-            if ($companyMismatch || $vatMismatch) {
+            // Hlášku o nesprávnej firme dávame aj pri DPH mismatchi (zlý DPH režim
+            // väčšinou znamená fakturáciu na zlú DAMARO spoločnosť). To ale NEPLATÍ,
+            // keď IČO na faktúre preukázateľne sedí – vtedy je firma správna a hlásime
+            // len samotný DPH problém (bod 5) bez falošnej hlášky o firme.
+            $showCompanyWarning = $companyMismatch || ($vatMismatch && !$icoConfirmedMatch);
+
+            if ($showCompanyWarning) {
                 $company = $transport->company;
 
                 // Očakávaná firma s rozlišujúcimi údajmi (názvy bývajú rovnaké,
@@ -481,6 +517,37 @@ class DocumentUploadChecker
         }
 
         return $warnings;
+    }
+
+    /**
+     * Dôkaz, že dokument bol reálne čitateľný: AI z neho vyčítala aspoň jeden
+     * nepochybný kľúčový údaj. Ak áno, prípadné readable=false je falošné a hlášku
+     * o nečitateľnosti nedávame.
+     */
+    private function readableEvidence(array $data): bool
+    {
+        // Rozpoznaný typ dokumentu (čokoľvek okrem 'unreadable').
+        $type = (string) ($data['detected_document_type'] ?? '');
+        if ($type !== '' && $type !== 'unreadable') {
+            return true;
+        }
+
+        // Vyčítaná suma faktúry.
+        if ((float) ($data['invoice_amount'] ?? 0) > 0) {
+            return true;
+        }
+
+        // Vyčítané IČO odberateľa.
+        if (preg_replace('/\D+/', '', (string) ($data['invoice_billed_to_ico'] ?? '')) !== '') {
+            return true;
+        }
+
+        // Vyčítaný názov odberateľa.
+        if (trim((string) ($data['invoice_billed_to'] ?? '')) !== '') {
+            return true;
+        }
+
+        return false;
     }
 
     /**

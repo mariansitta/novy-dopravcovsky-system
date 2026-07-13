@@ -68,6 +68,10 @@ Route::middleware(['api_key'])->group(function (){
     Route::post('/driver-messages/mark-synced', [API\DriverMessagesController::class, 'mark_synced'])->name('driver_messages.mark_synced');
     Route::post('/driver-messages/sync', [API\DriverMessagesController::class, 'sync'])->name('driver_messages.sync');
 
+    // AI kontrola dokladov – metriky (Damaro si ich raz denne stiahne)
+    Route::post('/ai-document-checks/get', [API\AiDocumentChecksController::class, 'get'])->name('ai_document_checks.get');
+    Route::post('/ai-document-checks/mark-synced', [API\AiDocumentChecksController::class, 'mark_synced'])->name('ai_document_checks.mark_synced');
+
     Route::post('/unsubscribes/get', [API\EmailUnsubscribesController::class, 'get'])->name('unsubscribes.get');
     Route::post('/unsubscribes/delete', [API\EmailUnsubscribesController::class, 'delete'])->name('unsubscribes.delete');
     Route::post('/unsubscribes/url', [API\EmailUnsubscribesController::class, 'url'])->name('unsubscribe.url');

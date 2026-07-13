@@ -31,7 +31,7 @@
 
                         </div>
 
-                        <form id="documents-form" action="{{ route('transports.documents', $transport->id) }}" method="post" enctype="multipart/form-data" @if(\App\Http\Controllers\TransportsController::aiDocCheckEnabledForDriver($transport->user?->driver_id)) data-check-url="{{ route('transports.check_document', $transport->id) }}" @endif>
+                        <form id="documents-form" action="{{ route('transports.documents', $transport->id) }}" method="post" enctype="multipart/form-data" data-check-url="{{ route('transports.check_document', $transport->id) }}" data-check-slots="{{ implode(',', \App\Http\Controllers\TransportsController::aiCheckSlots()) }}">
                             @csrf
 
                             <div class="row">
@@ -43,8 +43,8 @@
                                     </div>
 
                                     {{-- AI kontrola – varovania pre faktúru --}}
-                                    <div class="ai-check-loading text-muted small mt-2" data-slot="bill" style="display:none;">
-                                        <i class="fas fa-spinner fa-spin"></i> {{ trans('texts.ai-check-loading') }}
+                                    <div class="ai-check-loading fw-bold mt-2" data-slot="bill" style="display:none; color:#916c2e;">
+                                        <i class="fas fa-spinner fa-spin"></i> @php($aiLoadingLines = explode("\n", trans('texts.ai-check-loading')))<strong class="fs-5">{{ array_shift($aiLoadingLines) }}</strong>@if($aiLoadingLines)<br>{!! nl2br(e(implode("\n", $aiLoadingLines))) !!}@endif
                                     </div>
                                     <div class="ai-check-ok alert alert-success mt-2 mb-0" data-slot="bill" style="display:none;">
                                         <i class="fas fa-check-circle"></i> {{ trans('texts.ai-check-ok') }}
@@ -87,8 +87,8 @@
                                     </div>
 
                                     {{-- AI kontrola – varovania pre prepravné dokumenty --}}
-                                    <div class="ai-check-loading text-muted small mt-2" data-slot="docs" style="display:none;">
-                                        <i class="fas fa-spinner fa-spin"></i> {{ trans('texts.ai-check-loading') }}
+                                    <div class="ai-check-loading fw-bold mt-2" data-slot="docs" style="display:none; color:#916c2e;">
+                                        <i class="fas fa-spinner fa-spin"></i> @php($aiLoadingLines = explode("\n", trans('texts.ai-check-loading')))<strong class="fs-5">{{ array_shift($aiLoadingLines) }}</strong>@if($aiLoadingLines)<br>{!! nl2br(e(implode("\n", $aiLoadingLines))) !!}@endif
                                     </div>
                                     <div class="ai-check-ok alert alert-success mt-2 mb-0" data-slot="docs" style="display:none;">
                                         <i class="fas fa-check-circle"></i> {{ trans('texts.ai-check-ok') }}

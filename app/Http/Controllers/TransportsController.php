@@ -8,6 +8,7 @@ use App\Http\Requests\BillDocumentRequest;
 use App\Http\Requests\DocsDocumentRequest;
 use App\Http\Requests\DocumentsRequest;
 use App\Http\Requests\DeleteDocumentRequest;
+use App\Models\AiDocumentCheck;
 use App\Models\DriverMessage;
 use App\Models\Status;
 use App\Models\Transport;
@@ -15,6 +16,7 @@ use App\Models\TransportStatus;
 use App\Services\DocumentUploadChecker;
 use App\Traits\UploadTrait;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
@@ -24,16 +26,15 @@ class TransportsController extends Admin\AdminController
 {
     use UploadTrait;
 
-    // DOČASNÉ (testovanie): AI kontrola dokladov beží len pre týchto dopravcov.
-    // Po otestovaní celý tento blok + jeho použitia (guard v check_document a
-    // podmienka data-check-url v _modal.blade.php) zmazať / zapnúť plošne.
-    // Damaro, SANIJOTRANS
-    //private const AI_DOC_CHECK_DRIVER_IDS = [1271, 4560];
-    private const AI_DOC_CHECK_DRIVER_IDS = [1271];
+    // AI kontrola sa spúšťa len pre tieto sloty. Momentálne len faktúry ('bill').
+    // Pre zapnutie kontroly prepravných dokumentov pridaj sem 'docs':
+    //   private const AI_CHECK_SLOTS = ['bill', 'docs'];
+    private const AI_CHECK_SLOTS = ['bill'];
 
-    public static function aiDocCheckEnabledForDriver(?int $driverId): bool
+    /** Sloty, pre ktoré je aktívna AI kontrola (pre backend aj frontend). */
+    public static function aiCheckSlots(): array
     {
-        return $driverId !== null && in_array($driverId, self::AI_DOC_CHECK_DRIVER_IDS, true);
+        return self::AI_CHECK_SLOTS;
     }
 
     public function index()
@@ -267,21 +268,22 @@ class TransportsController extends Admin\AdminController
             return response()->json(['ok' => true, 'warnings' => []]);
         }
 
-        // DOČASNÉ: AI kontrola len pre povolených dopravcov (whitelist hore v triede).
-        if (!self::aiDocCheckEnabledForDriver($transport->user?->driver_id)) {
-            return response()->json(['ok' => true, 'warnings' => []]);
-        }
-
         $warnings = [];
         $results = [];
 
-        foreach (['bill', 'docs'] as $slot) {
+        foreach (self::AI_CHECK_SLOTS as $slot) {
             if (!$request->hasFile($slot)) {
                 continue;
             }
 
             $result = $checker->check($request->file($slot), $slot, $transport);
             $warnings = array_merge($warnings, $result['warnings']);
+
+            // Ulož metriky každej reálne prebehnutej analýzy (pre neskoršiu analýzu
+            // a prenos do Damaro). Skipnuté (bez API kľúča / veľký súbor) neukladáme.
+            if (!($result['skipped'] ?? false)) {
+                $this->storeAiCheckMetrics($transport, $slot, $result);
+            }
 
             // checked = AI kontrola reálne prebehla (nebola preskočená).
             // Frontend podľa toho rozlíši zelené OK (checked, 0 varovaní) od skipnutia.
@@ -298,6 +300,92 @@ class TransportsController extends Admin\AdminController
             'warnings' => $warnings, // spätná kompatibilita
             'results' => $results,
         ]);
+    }
+
+    /**
+     * Uloží kompaktné metriky jednej AI analýzy dokladu (na neskoršiu analýzu
+     * a prenos do Damaro). Nikdy nesmie zhodiť upload – všetko v try/catch.
+     */
+    private function storeAiCheckMetrics(Transport $transport, string $slot, array $result): void
+    {
+        try {
+            $raw = $result['raw'] ?? [];
+            $meta = $result['meta'] ?? [];
+
+            $warningCount = collect($result['warnings'] ?? [])
+                ->where('severity', 'warning')
+                ->count();
+
+            AiDocumentCheck::create([
+                'transport_id'              => $transport->transport_id,
+                'slot'                      => $slot,
+                'original_filename'         => $meta['original_filename'] ?? null,
+
+                'model_used'                => $meta['model_used'] ?? null,
+                'escalated'                 => (bool) ($meta['escalated'] ?? false),
+                'confidence'                => isset($raw['confidence']) ? (float) $raw['confidence'] : null,
+                'duration_ms'               => (int) ($meta['duration_ms'] ?? 0),
+
+                'detected_document_type'    => $raw['detected_document_type'] ?? null,
+                'type_matches_slot'         => $raw['type_matches_slot'] ?? null,
+                'company_matches_expected'  => $raw['company_matches_expected'] ?? null,
+                'amount_matches_expected'   => $raw['amount_matches_expected'] ?? null,
+                'vat_matches_expected'      => $raw['vat_matches_expected'] ?? null,
+                'invoice_has_vat'           => $raw['invoice_has_vat'] ?? null,
+                'readable'                  => $raw['readable'] ?? null,
+                'carrier_name_found'        => $raw['carrier_name_found'] ?? null,
+
+                'invoice_amount'            => isset($raw['invoice_amount']) ? (float) $raw['invoice_amount'] : null,
+                'invoice_currency'          => $raw['invoice_currency'] ?? null,
+                'invoice_billed_to_ico'     => $raw['invoice_billed_to_ico'] ?? null,
+                'invoice_billed_to_country' => $raw['invoice_billed_to_country'] ?? null,
+
+                'warnings_count'            => $warningCount,
+                'warning_codes'            => $this->aiWarningCodes($raw, $slot),
+
+                'synced_at'                 => null,
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('AI doc check metrics store failed', [
+                'transport_id' => $transport->id,
+                'slot' => $slot,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Deterministické kódy problémov odvodené z AI výstupu (nie z voľných hlášok),
+     * aby sa dali v Damaro agregovať. Zodpovedajú kontrolám v buildWarnings().
+     *
+     * @return array<int, string>
+     */
+    private function aiWarningCodes(array $raw, string $slot): array
+    {
+        $codes = [];
+
+        if (($raw['type_matches_slot'] ?? true) === false) {
+            $codes[] = 'type_mismatch';
+        }
+        if (($raw['readable'] ?? true) === false) {
+            $codes[] = 'unreadable';
+        }
+        if ($slot === 'bill') {
+            if (($raw['company_matches_expected'] ?? 'unknown') === 'mismatch') {
+                $codes[] = 'company_mismatch';
+            }
+            if (($raw['amount_matches_expected'] ?? 'unknown') === 'mismatch') {
+                $codes[] = 'amount_mismatch';
+            }
+            if (($raw['vat_matches_expected'] ?? 'unknown') === 'mismatch') {
+                $codes[] = 'vat_mismatch';
+            }
+        }
+        if ($slot === 'docs' && ($raw['carrier_name_found'] ?? true) === false) {
+            $codes[] = 'carrier_name_missing';
+        }
+
+        return $codes;
     }
 
     public function document_delete(DeleteDocumentRequest $request, $id){

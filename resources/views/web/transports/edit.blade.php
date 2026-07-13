@@ -126,6 +126,11 @@
                     const checkUrl = $form.data('check-url');
                     const $submitBtn = $form.find('button[type=submit]').last();
 
+                    // Sloty, ktoré sa reálne kontrolujú AI (z konštanty v controlleri).
+                    // Pre ostatné sa kontrola vôbec nespúšťa (žiadny loading, žiadny box).
+                    const checkSlots = String($form.data('check-slots') || 'bill')
+                        .split(',').map(s => s.trim()).filter(Boolean);
+
                     // Stav každého slotu: 'idle' | 'checking' | 'ok' | 'warn'
                     const slotStatus = { bill: 'idle', docs: 'idle' };
 
@@ -210,6 +215,13 @@
                     // Pri výbere/zmene súboru spusti kontrolu daného slotu
                     $form.find('input[type=file]').on('change', function () {
                         const slot = this.name; // 'bill' alebo 'docs'
+
+                        // Slot, ktorý sa nekontroluje AI, ignorujeme úplne
+                        // (nezobrazujeme loading ani žiadny výsledok).
+                        if (checkSlots.indexOf(slot) === -1) {
+                            return;
+                        }
+
                         if (this.files && this.files.length > 0) {
                             checkSlot(slot, this.files[0]);
                         } else {

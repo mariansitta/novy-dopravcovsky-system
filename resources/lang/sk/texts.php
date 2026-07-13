@@ -9,7 +9,7 @@ return [
     // AI kontrola dokladov
     'ai-check-title' => 'Skontrolujte nahrané doklady',
     'ai-check-hint'  => 'Toto je iba upozornenie z automatickej kontroly – môže sa mýliť. Ak ste si istí, že sú doklady správne, môžete ich aj tak uložiť.',
-    'ai-check-loading' => 'Kontrolujem doklad…',
+    'ai-check-loading' => "Vážený dopravca,\npráve prebieha kontrola základných náležitostí Vašej faktúry. Tento proces trvá približne 10–15 sekúnd.\nOverujeme správnosť fakturačných údajov, adresy, fakturovanej sumy a režimu DPH.\nProsíme Vás o chvíľu strpenia.",
     'ai-check-ok' => 'Kontrola prebehla v poriadku.',
 
     'Tags' => 'Tagy',
