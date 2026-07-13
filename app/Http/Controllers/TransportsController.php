@@ -146,7 +146,8 @@ class TransportsController extends Admin\AdminController
         $filename = $this->upload_file($request, 'bill', 'transports', $transport, 'bill');
         $transport->bill_file = $filename;
         $transport->bill_sent = 0;
-        $transport->status_id = $this->resolveUploadStatusId($transport);
+        $this->clearReturnedState($transport, 'bill');
+        $transport->status_id = $transport->resolveUploadStatusId();
 
         $transport->due_date = now()->addDays($transport->due_days);
         $transport->save();
@@ -166,7 +167,8 @@ class TransportsController extends Admin\AdminController
         $filename = $this->upload_file($request, 'docs', 'transports', $transport, 'docs');
         $transport->docs_file = $filename;
         $transport->docs_sent = 0;
-        $transport->status_id = $this->resolveUploadStatusId($transport);
+        $this->clearReturnedState($transport, 'docs');
+        $transport->status_id = $transport->resolveUploadStatusId();
 
         $transport->due_date = now()->addDays($transport->due_days);
         $transport->save();
@@ -183,9 +185,21 @@ class TransportsController extends Admin\AdminController
             return redirect()->route('index');
         }
 
-        $this->upload_file($request, 'bill', 'transports', $transport, 'bill');
-        $this->upload_file($request, 'docs', 'transports', $transport, 'docs');
-        $transport->status_id = $this->resolveUploadStatusId($transport);
+        $billFilename = $this->upload_file($request, 'bill', 'transports', $transport, 'bill');
+        $docsFilename = $this->upload_file($request, 'docs', 'transports', $transport, 'docs');
+
+        if ($billFilename) {
+            $transport->bill_file = $billFilename;
+            $transport->bill_sent = 0;
+            $this->clearReturnedState($transport, 'bill');
+        }
+        if ($docsFilename) {
+            $transport->docs_file = $docsFilename;
+            $transport->docs_sent = 0;
+            $this->clearReturnedState($transport, 'docs');
+        }
+
+        $transport->status_id = $transport->resolveUploadStatusId();
 
         $transport->due_date = now()->addDays($transport->due_days);
         $transport->save();
@@ -404,7 +418,7 @@ class TransportsController extends Admin\AdminController
 
         // Status "Čaká na spracovanie" platí len keď sú nahraté OBA doklady.
         // Po vymazaní jedného sa transport vráti do pôvodného stavu (bez statusu).
-        $transport->status_id = $this->resolveUploadStatusId($transport);
+        $transport->status_id = $transport->resolveUploadStatusId();
 
         $transport->save();
 
@@ -414,20 +428,23 @@ class TransportsController extends Admin\AdminController
     }
 
     /**
-     * Status "Čaká na spracovanie" (uploaded) platí len ak má transport nahraté
-     * OBA doklady (faktúru aj prepravné dokumenty). Inak sa vráti na null
-     * (pôvodný stav – čaká sa na dodanie oboch dokladov).
+     * Po nahratí opravy vyčisti stav "vrátené" daného slotu. Keď už nečaká
+     * na opravu ani druhý slot, vyčisti aj poznámku (jej znenie ostáva
+     * v histórii transport_notices).
      */
-    private function resolveUploadStatusId(Transport $transport): ?int
+    private function clearReturnedState(Transport $transport, string $slot): void
     {
-        $hasBill = $transport->files()->where('type', 'bill')->exists();
-        $hasDocs = $transport->files()->where('type', 'docs')->exists();
-
-        if ($hasBill && $hasDocs) {
-            return Status::where('slug', 'uploaded')->value('id');
+        if ($transport->{$slot . '_returned_at'} === null) {
+            return;
         }
 
-        return null;
+        $transport->{$slot . '_returned_at'} = null;
+        $transport->{$slot . '_return_reason'} = null;
+
+        $other = $slot === 'bill' ? 'docs' : 'bill';
+        if (! $transport->isSlotReturned($other)) {
+            $transport->driver_notice = null;
+        }
     }
 
     public function _table() {
@@ -451,6 +468,10 @@ class TransportsController extends Admin\AdminController
 //                'timocom_id',
 //                'raal_id',
                 'driver_notice',
+                'bill_returned_at',
+                'bill_return_reason',
+                'docs_returned_at',
+                'docs_return_reason',
                 'bill_file',
                 'docs_file',
                 'driver_plate_number',

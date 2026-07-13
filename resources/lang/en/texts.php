@@ -87,6 +87,13 @@ return [
     'bill-uploaded' => 'Received invoice is successfully uploaded.',
     'docs-uploaded' => 'Transport documents are successfully uploaded.',
     'notify-email' => 'Your notify email',
+    'returned-slot-title' => 'Returned for correction',
+    'taken-over-title' => 'Taken over for processing',
+    'returned-banner-bill' => 'The received invoice was returned for correction',
+    'returned-banner-docs' => 'The transport documents were returned for correction',
+    'returned-reason' => 'Reason',
+    'returned-upload-hint' => 'Please upload a corrected file.',
+    'notice-history' => 'Notice history',
 
     'email' => [
         'notify-text-1' => 'Dear carrier, there was an issue processing your invoice and transport documents for order no. ',

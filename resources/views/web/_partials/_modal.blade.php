@@ -36,6 +36,16 @@
 
                             <div class="row">
                                 <div class="col-5">
+                                    @if($transport->isSlotReturned('bill'))
+                                        @php($billReason = $transport->bill_return_reason ?: $transport->driver_notice)
+                                        <div class="alert alert-danger">
+                                            <b>{{ trans('texts.returned-banner-bill') }}{{ $transport->bill_returned_at ? ' (' . $transport->bill_returned_at->format('d. m. Y') . ')' : '' }}.</b>
+                                            @if($billReason)
+                                                <br>{{ trans('texts.returned-reason') }}: {{ $billReason }}
+                                            @endif
+                                            <br>{{ trans('texts.returned-upload-hint') }}
+                                        </div>
+                                    @endif
                                     @if(!$transport->bill_file)
                                     <div class="form-group">
                                         <input name="bill" type="file" class="form-control filestyle" data-buttonname="btn-secondary" data-buttonText="{{ trans('texts.Upload file') }}">
@@ -55,7 +65,7 @@
                                         <p class="mb-0 small">{{ trans('texts.ai-check-hint') }}</p>
                                     </div>
                                     @else
-                                        <div>{{ trans('texts.docs-uploaded') }}</div>
+                                        <div>{{ trans('texts.bill-uploaded') }}</div>
                                     @endif
 
                                     @if($path = $transport->bill)
@@ -80,6 +90,16 @@
                                 </div>
                                 <div class="col-2"></div>
                                 <div class="col-5">
+                                    @if($transport->isSlotReturned('docs'))
+                                        @php($docsReason = $transport->docs_return_reason ?: $transport->driver_notice)
+                                        <div class="alert alert-danger">
+                                            <b>{{ trans('texts.returned-banner-docs') }}{{ $transport->docs_returned_at ? ' (' . $transport->docs_returned_at->format('d. m. Y') . ')' : '' }}.</b>
+                                            @if($docsReason)
+                                                <br>{{ trans('texts.returned-reason') }}: {{ $docsReason }}
+                                            @endif
+                                            <br>{{ trans('texts.returned-upload-hint') }}
+                                        </div>
+                                    @endif
                                     @if(!$transport->docs_file)
                                     <div class="form-group">
                                         <input name="docs" type="file" class="form-control filestyle" data-buttonname="btn-secondary" data-buttonText="{{ trans('texts.Upload file') }}">
@@ -126,6 +146,26 @@
                                     </div>
                                 </div>
                             </div>
+                            @php($noticeHistory = $transport->notices()->orderByDesc('id')->get())
+                            @if($noticeHistory->isNotEmpty())
+                                <div class="row mt-2">
+                                    <div class="col">
+                                        <details>
+                                            <summary style="cursor: pointer; color: #6c757d;">{{ trans('texts.notice-history') }} ({{ $noticeHistory->count() }})</summary>
+                                            <ul class="mt-2 mb-0" style="font-size: 0.85rem; color: #6c757d; padding-left: 18px;">
+                                                @foreach($noticeHistory as $notice)
+                                                    <li>
+                                                        <b>{{ $notice->created_at->format('d. m. Y H:i') }}</b>
+                                                        @if($notice->slot === 'bill') – {{ trans('texts.Received invoice') }} @elseif($notice->slot === 'docs') – {{ trans('texts.Transport documents') }} @endif
+                                                        : {{ $notice->body }}
+                                                    </li>
+                                                @endforeach
+                                            </ul>
+                                        </details>
+                                    </div>
+                                </div>
+                            @endif
+
                             <div class="row">
                                 <div class="col">
                                     <div class="text-center mt-4 form-group">

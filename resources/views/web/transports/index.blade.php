@@ -26,6 +26,7 @@
                         $statusConfig = [
                             ''          => ['label' => $isSk ? 'Nový'                 : 'New',       'bg' => '#6c757d', 'color' => '#fff'],
                             'uploaded'  => ['label' => $isSk ? 'Čaká na spracovanie' : 'Pending',   'bg' => '#f0ad4e', 'color' => '#fff'],
+                            'returned'  => ['label' => $isSk ? 'Vrátené na opravu'   : 'Returned for correction', 'bg' => '#dc3545', 'color' => '#fff'],
                             'processed' => ['label' => $isSk ? 'Spracované'           : 'Processed', 'bg' => '#0d6efd', 'color' => '#fff'],
                             'paid'      => ['label' => $isSk ? 'Uhradené'             : 'Paid',      'bg' => '#28a745', 'color' => '#fff'],
                         ];
@@ -74,8 +75,13 @@
                                         </td>
 
                                         <td>
-                                            @php $sCfg = $statusConfig[$item->status_slug ?? ''] ?? $statusConfig['']; @endphp
-                                            <span class="badge" style="background-color: {{ $sCfg['bg'] }}; color: {{ $sCfg['color'] }}; font-size: 0.85rem; padding: 5px 10px;">{{ $item->status_name ?? $sCfg['label'] }}</span>
+                                            @php
+                                                $displaySlug = $item->display_status_slug;
+                                                $sCfg = $statusConfig[$displaySlug] ?? $statusConfig[''];
+                                                // Pri vrátení má prednosť odvodený stav pred názvom zo status_id.
+                                                $badgeLabel = $displaySlug === 'returned' ? $sCfg['label'] : ($item->status_name ?? $sCfg['label']);
+                                            @endphp
+                                            <span class="badge" style="background-color: {{ $sCfg['bg'] }}; color: {{ $sCfg['color'] }}; font-size: 0.85rem; padding: 5px 10px;">{{ $badgeLabel }}</span>
                                         </td>
 
                                         {{--
@@ -87,8 +93,23 @@
                                         --}}
 
                                         <td>
+                                            @php
+                                                $billReturned = $item->isSlotReturned('bill');
+                                                $docsReturned = $item->isSlotReturned('docs');
+                                            @endphp
                                             @if($item->driver_notice !== null)
                                                 <div style="max-width: 350px; white-space: normal;">{{ $item->driver_notice }}</div>
+                                            @endif
+                                            {{-- Per-slot dôvody vrátenia (ak nie sú totožné s poznámkou) --}}
+                                            @if($billReturned && $item->bill_return_reason && $item->bill_return_reason !== $item->driver_notice)
+                                                <div style="max-width: 350px; white-space: normal;" class="text-danger">
+                                                    <b>{{ trans('texts.Received invoice') }}:</b> {{ $item->bill_return_reason }}
+                                                </div>
+                                            @endif
+                                            @if($docsReturned && $item->docs_return_reason && $item->docs_return_reason !== $item->driver_notice)
+                                                <div style="max-width: 350px; white-space: normal;" class="text-danger">
+                                                    <b>{{ trans('texts.Transport documents') }}:</b> {{ $item->docs_return_reason }}
+                                                </div>
                                             @endif
                                         </td>
 
@@ -99,24 +120,34 @@
 
                                             // Vrátane zmazaných – pri transportoch s priradeným statusom Damaro
                                             // doklady stiahne a vymaže, ale dopravca má stále vidieť, že tam boli.
+                                            // Vrátený slot je výnimka: starý súbor sa nezobrazuje, treba nahrať opravu.
                                             $billAny = $item->files->where('type', 'bill')->sortByDesc('id')->first();
                                             $docsAny = $item->files->where('type', 'docs')->sortByDesc('id')->first();
 
                                             // Červené X (chýbajúci doklad) len pri úplne novom transporte bez statusu.
-                                            // Akýkoľvek priradený status => zobraz ikonku aj zo zmazaného dokladu.
                                             $hasStatus = $item->status_id !== null;
 
-                                            $billFile = $billLive ?: ($hasStatus ? $billAny : null);
-                                            $docsFile = $docsLive ?: ($hasStatus ? $docsAny : null);
+                                            $billFile = $billLive ?: (($hasStatus && !$billReturned) ? $billAny : null);
+                                            $docsFile = $docsLive ?: (($hasStatus && !$docsReturned) ? $docsAny : null);
                                         @endphp
 
                                         <td>
-                                            @if($billFile)
+                                            @if($billReturned)
+                                                @php $billReason = $item->bill_return_reason ?: $item->driver_notice; @endphp
                                                 <a
                                                     class="btn btn-light waves-effect waves-light action-button"
-                                                    title="{{ trans('texts.Received invoice') }}"
+                                                    title="{{ trans('texts.returned-slot-title') }} {{ $item->bill_returned_at?->format('d. m. Y') }}{{ $billReason ? ' – ' . $billReason : '' }}"
+                                                    href="{{ route('transports.edit', $item->trans_id) }}"
+                                                >
+                                                    <i class="fas fa-exclamation-triangle text-danger action-icon"></i>
+                                                </a>
+                                            @elseif($billFile)
+                                                <a
+                                                    class="btn btn-light waves-effect waves-light action-button"
+                                                    title="{{ $billLive ? trans('texts.Received invoice') : trans('texts.taken-over-title') }}"
                                                     href="{{ asset($billFile->path . $billFile->filename) }}"
                                                     target="_blank"
+                                                    @if(!$billLive) style="opacity: 0.45;" @endif
                                                 >
                                                     <i class="fas fa-file-alt action-icon"></i>
                                                 </a>
@@ -126,12 +157,22 @@
                                         </td>
 
                                         <td>
-                                            @if($docsFile)
+                                            @if($docsReturned)
+                                                @php $docsReason = $item->docs_return_reason ?: $item->driver_notice; @endphp
                                                 <a
                                                     class="btn btn-light waves-effect waves-light action-button"
-                                                    title="{{ trans('texts.Transport documents') }}"
+                                                    title="{{ trans('texts.returned-slot-title') }} {{ $item->docs_returned_at?->format('d. m. Y') }}{{ $docsReason ? ' – ' . $docsReason : '' }}"
+                                                    href="{{ route('transports.edit', $item->trans_id) }}"
+                                                >
+                                                    <i class="fas fa-exclamation-triangle text-danger action-icon"></i>
+                                                </a>
+                                            @elseif($docsFile)
+                                                <a
+                                                    class="btn btn-light waves-effect waves-light action-button"
+                                                    title="{{ $docsLive ? trans('texts.Transport documents') : trans('texts.taken-over-title') }}"
                                                     href="{{ asset($docsFile->path . $docsFile->filename) }}"
                                                     target="_blank"
+                                                    @if(!$docsLive) style="opacity: 0.45;" @endif
                                                 >
                                                     <i class="fas fa-car action-icon"></i>
                                                 </a>
@@ -143,7 +184,7 @@
                                         <td>
                                             @if($item->invoice_type === 'mail')
                                                 <span class="badge text-dark" style="background-color:#ffc107" title="Faktúra poštou">Poštou</span>
-                                            @elseif(!($item->bill_file && $item->docs_file) && !$item->is_deleted)
+                                            @elseif($item->needs_action && !$item->is_deleted)
                                                 <a
                                                     class="btn btn-warning waves-effect waves-light action-button"
                                                     title="{{ trans('texts.Upload documents') }}"
@@ -163,6 +204,7 @@
                         $statusDescriptions = [
                             ''          => $isSk ? 'Transport bol pridelený, dokumenty ešte neboli nahrané.'           : 'Transport assigned, no documents uploaded yet.',
                             'uploaded'  => $isSk ? 'Dokumenty boli nahrané a čakajú na spracovanie v Damaro.'          : 'Documents uploaded, waiting to be processed by Damaro.',
+                            'returned'  => $isSk ? 'Doklad bol vrátený na opravu – nahrajte prosím opravený súbor (dôvod nájdete v poznámke).' : 'A document was returned for correction – please upload a corrected file (see the notice for the reason).',
                             'processed' => $isSk ? 'Doklady boli prijaté a spracované.'                               : 'Documents have been received and processed.',
                             'paid'      => $isSk ? 'Faktúra bola uhradená.'                                            : 'Invoice has been paid.',
                         ];

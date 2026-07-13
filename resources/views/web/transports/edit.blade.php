@@ -76,6 +76,12 @@
                         },
                         { "data": null,
                             render: function (data) {
+                                // Vrátený slot = returned_at nastavené a žiadny živý súbor (subselect null).
+                                let billReturned = data.bill_returned_at !== null && data.bill === null;
+                                let docsReturned = data.docs_returned_at !== null && data.docs === null;
+                                if (data.status_slug !== 'paid' && (billReturned || docsReturned)) {
+                                    return "<span class='badge' style='background-color:#dc3545; color:#fff; padding: 5px 10px;'>{{ trans('texts.returned-slot-title') }}</span>";
+                                }
                                 return "<span "+(data.status_slug === 'paid' ? "class='text-success'" : '')+">"+(data.status_name ?? '')+"</span>";
                             }
                         },

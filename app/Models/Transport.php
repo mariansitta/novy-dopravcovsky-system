@@ -12,6 +12,10 @@ class Transport extends BaseModel
         'number',
         'transport_id',
         'driver_notice',
+        'bill_returned_at',
+        'bill_return_reason',
+        'docs_returned_at',
+        'docs_return_reason',
         'bill_file',
         'docs_file',
         'docs_sent',
@@ -45,6 +49,8 @@ class Transport extends BaseModel
     protected $casts = [
         'loadings_json'  => 'array',
         'unloadings_json' => 'array',
+        'bill_returned_at' => 'datetime',
+        'docs_returned_at' => 'datetime',
     ];
 
     protected $dates = ['deleted_at', 'paid_at'];
@@ -59,6 +65,69 @@ class Transport extends BaseModel
 
     public function files(){
         return $this->morphMany(File::class, 'fileable');
+    }
+
+    public function notices(){
+        return $this->hasMany(TransportNotice::class);
+    }
+
+    // Živý (nezmazaný) súbor daného typu existuje. Pri eager-loaded 'files'
+    // (index načítava withTrashed) filtruje kolekciu, inak ide do DB.
+    public function hasLiveFile(string $slot): bool
+    {
+        if ($this->relationLoaded('files')) {
+            return $this->files
+                ->whereNull('deleted_at')
+                ->where('type', $slot)
+                ->isNotEmpty();
+        }
+
+        return $this->files()->where('type', $slot)->exists();
+    }
+
+    // Slot je vrátený na opravu: damaro ho vrátilo a dopravca ešte nenahral opravu.
+    public function isSlotReturned(string $slot): bool
+    {
+        return $this->{$slot . '_returned_at'} !== null && ! $this->hasLiveFile($slot);
+    }
+
+    /**
+     * Status "Čaká na spracovanie" (uploaded) platí len ak sú k dispozícii OBA
+     * doklady. Slot je splnený, ak existuje živý súbor ALEBO je nastavený
+     * {slot}_file (súbor je už u damara – lokálny záznam je soft-deleted).
+     */
+    public function resolveUploadStatusId(): ?int
+    {
+        $hasBill = $this->hasLiveFile('bill') || $this->bill_file;
+        $hasDocs = $this->hasLiveFile('docs') || $this->docs_file;
+
+        if ($hasBill && $hasDocs) {
+            return Status::where('slug', 'uploaded')->value('id');
+        }
+
+        return null;
+    }
+
+    // Stav pre badge dopravcu: 'paid' > 'returned' > slug zo status_id.
+    public function getDisplayStatusSlugAttribute(): string
+    {
+        if ($this->status_slug === 'paid') {
+            return 'paid';
+        }
+
+        if ($this->isSlotReturned('bill') || $this->isSlotReturned('docs')) {
+            return 'returned';
+        }
+
+        return $this->status_slug ?? '';
+    }
+
+    // Dopravca má čo nahrať – riadi zobrazenie upload tlačidla (Akcie).
+    // Zámerne rovnaká podmienka ako doteraz: vrátenie slotu nuluje {slot}_file,
+    // prevzaté doklady (soft-deleted, ale {slot}_file nastavený) tlačidlo neukazujú.
+    public function getNeedsActionAttribute(): bool
+    {
+        return ! ($this->bill_file && $this->docs_file);
     }
 
     /*

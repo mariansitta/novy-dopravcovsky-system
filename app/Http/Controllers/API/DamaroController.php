@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Mail;
 use App\Mail\NotifyMail;
 use App\Models\Status;
 use App\Models\Transport;
+use App\Models\TransportNotice;
 use App\Models\User;
 use App\Traits\DeleteTrait;
 use Illuminate\Support\Str;
@@ -64,25 +65,46 @@ class DamaroController extends Controller
                 $transport->restore();
             }
 
+            // Živý súbor s {slot}_sent = 0 = čerstvý upload dopravcu čakajúci na
+            // stiahnutie damarom – sync ho nesmie zmazať ani prepnúť na sent,
+            // inak sa oprava nikdy nedostane do damara (exists() ju prestane ponúkať).
+            $billPendingPickup = !$transport->bill_sent && $transport->files->where('type', 'bill')->isNotEmpty();
+            $docsPendingPickup = !$transport->docs_sent && $transport->files->where('type', 'docs')->isNotEmpty();
+
             if (isset($request->transport['bill_file'])) {
-                $this->delete_files($transport->files->where('type', 'bill'));
-                $transport->bill_sent = 1;
-                $transport->bill_file = $request->transport['bill_file'];
+                if (!$billPendingPickup) {
+                    $this->delete_files($transport->files->where('type', 'bill'));
+                    $transport->bill_sent = 1;
+                    $transport->bill_file = $request->transport['bill_file'];
+                    $transport->bill_returned_at = null;
+                    $transport->bill_return_reason = null;
+                }
             } elseif ($transport->bill_sent) {
+                // Damaro súbor odstránilo (malo ho a už ho neposiela) = vrátenie.
                 $this->delete_files($transport->files->where('type', 'bill'));
                 $transport->bill_sent = 0;
                 $transport->bill_file = null;
+                $transport->bill_returned_at = now();
+                $transport->bill_return_reason = $request->transport['driver_notice'] ?? null;
+                TransportNotice::record($transport->id, $transport->bill_return_reason, 'return', 'bill');
             }
             // bill_sent = 0 a bez bill_file = súbor čaká na stiahnutie, nemaž ho
 
             if (isset($request->transport['docs_file'])) {
-                $this->delete_files($transport->files->where('type', 'docs'));
-                $transport->docs_sent = 1;
-                $transport->docs_file = $request->transport['docs_file'];
+                if (!$docsPendingPickup) {
+                    $this->delete_files($transport->files->where('type', 'docs'));
+                    $transport->docs_sent = 1;
+                    $transport->docs_file = $request->transport['docs_file'];
+                    $transport->docs_returned_at = null;
+                    $transport->docs_return_reason = null;
+                }
             } elseif ($transport->docs_sent) {
                 $this->delete_files($transport->files->where('type', 'docs'));
                 $transport->docs_sent = 0;
                 $transport->docs_file = null;
+                $transport->docs_returned_at = now();
+                $transport->docs_return_reason = $request->transport['driver_notice'] ?? null;
+                TransportNotice::record($transport->id, $transport->docs_return_reason, 'return', 'docs');
             }
             // docs_sent = 0 a bez docs_file = súbor čaká na stiahnutie, nemaž ho
 
@@ -120,6 +142,9 @@ class DamaroController extends Controller
             }
 
             if (isset($request->transport['driver_notice'])) {
+                if ($transport->driver_notice != $request->transport['driver_notice']) {
+                    TransportNotice::record($transport->id, $request->transport['driver_notice'], 'notice');
+                }
                 $transport->driver_notice = $request->transport['driver_notice'];
             } else {
                 $transport->driver_notice = null;
@@ -231,8 +256,20 @@ class DamaroController extends Controller
 
             if ($transport->driver_notice != $request->driver_notice) {
                 $sendemail = true;
+                TransportNotice::record($transport->id, $request->driver_notice, 'notice');
             }
             $transport->driver_notice = $request->driver_notice;
+
+            // Poradie delete→notice (edit modal v damare posiela kôš a Uložiť ako
+            // samostatné requesty): dôvod vrátenia doplň k už vrátenému slotu.
+            // Pri zmene textu prepíš aj existujúci dôvod – v damare je poznámka
+            // jedna spoločná a najnovší text je ten platný.
+            foreach (['bill', 'docs'] as $slot) {
+                if ($transport->isSlotReturned($slot)
+                    && ($sendemail || $transport->{$slot . '_return_reason'} === null)) {
+                    $transport->{$slot . '_return_reason'} = $request->driver_notice;
+                }
+            }
 
             if ($transport->status_id !== $paidStatus->id && ($transport->bill_sent || $transport->docs_sent)) {
                 $transport->status_id = $uploadedStatus->id;

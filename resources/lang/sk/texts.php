@@ -91,6 +91,13 @@ return [
     'bill-uploaded' => 'Prijatá faktúra je úspešne nahratá.',
     'docs-uploaded' => 'Prepravné dokumenty sú úspešne nahraté.',
     'notify-email' => 'Váš email pre upozornenia',
+    'returned-slot-title' => 'Vrátené na opravu',
+    'taken-over-title' => 'Prevzaté na spracovanie',
+    'returned-banner-bill' => 'Prijatá faktúra bola vrátená na opravu',
+    'returned-banner-docs' => 'Prepravné dokumenty boli vrátené na opravu',
+    'returned-reason' => 'Dôvod',
+    'returned-upload-hint' => 'Nahrajte prosím opravený súbor.',
+    'notice-history' => 'História poznámok',
 
     'email' => [
         'notify-text-1' => 'Vážený dopravca, pri spracovávaní Vašej faktúry a prepravných dokladov k objednávke č. ',

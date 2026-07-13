@@ -8,6 +8,7 @@ use App\Http\Requests\TransportDataRequest;
 use App\Http\Requests\DeleteFileRequest;
 use App\Models\Status;
 use App\Models\Transport;
+use App\Models\TransportNotice;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -189,54 +190,19 @@ class TransportsController extends Controller
 
     public function bill_delete(DeleteFileRequest $request)
     {
-        Log::info('API bill_delete requested', [
-            'transport_id' => $request->id,
-        ]);
-
-        // zahrnieme aj soft-deleted záznamy
-        $transport = Transport::withTrashed()
-            ->where('transport_id', $request->id)
-            ->firstOrFail();
-
-        Log::info('API bill_delete transport found', [
-            'id'          => $transport->id,
-            'transport_id'=> $transport->transport_id,
-            'deleted_at'  => $transport->deleted_at,
-        ]);
-
-        // ak je záznam soft-deleted, obnovíme ho
-        if ($transport->trashed()) {
-            $transport->restore();
-            Log::info('API bill_delete restored soft-deleted transport', [
-                'id' => $transport->id,
-            ]);
-        }
-
-        $before = [
-            'bill_sent' => $transport->bill_sent,
-            'bill_file' => $transport->bill_file,
-        ];
-
-        $transport->update([
-            'bill_sent' => 0,
-            'bill_file' => null,
-        ]);
-
-        Log::info('API bill_delete completed', [
-            'transport_id' => $request->id,
-            'before'       => $before,
-            'after'        => [
-                'bill_sent' => $transport->bill_sent,
-                'bill_file' => $transport->bill_file,
-            ],
-        ]);
-
-        return response([], 200);
+        return $this->returnSlot($request, 'bill');
     }
 
     public function docs_delete(DeleteFileRequest $request)
     {
-        Log::info('API docs_delete requested', [
+        return $this->returnSlot($request, 'docs');
+    }
+
+    // Vrátenie dokladu na opravu (damaro zmazalo súbor). Okrem vynulovania
+    // {slot}_sent/{slot}_file zaznamená per-slot stav "vrátené" + dôvod.
+    private function returnSlot(DeleteFileRequest $request, string $slot)
+    {
+        Log::info("API {$slot}_delete requested", [
             'transport_id' => $request->id,
         ]);
 
@@ -245,36 +211,53 @@ class TransportsController extends Controller
             ->where('transport_id', $request->id)
             ->firstOrFail();
 
-        Log::info('API docs_delete transport found', [
-            'id'          => $transport->id,
-            'transport_id'=> $transport->transport_id,
-            'deleted_at'  => $transport->deleted_at,
-        ]);
-
         // ak je záznam soft-deleted, obnovíme ho
         if ($transport->trashed()) {
             $transport->restore();
-            Log::info('API docs_delete restored soft-deleted transport', [
+            Log::info("API {$slot}_delete restored soft-deleted transport", [
                 'id' => $transport->id,
             ]);
         }
 
+        // Živý súbor s {slot}_sent = 0 = dopravca už medzičasom nahral opravu,
+        // ktorá čaká na vyzdvihnutie damarom – nesmieme ju zmazať ani označiť
+        // slot ako vrátený. Nič nemeníme, damaro si ju stiahne cez exists/file.
+        $liveFileExists = $transport->files()->where('type', $slot)->exists();
+        if ($liveFileExists && ! $transport->{$slot . '_sent'}) {
+            Log::info("API {$slot}_delete skipped - fresh upload pending pickup", [
+                'transport_id' => $request->id,
+            ]);
+            return response([], 200);
+        }
+
         $before = [
-            'docs_sent' => $transport->docs_sent,
-            'docs_file' => $transport->docs_file,
+            $slot . '_sent' => $transport->{$slot . '_sent'},
+            $slot . '_file' => $transport->{$slot . '_file'},
         ];
 
-        $transport->update([
-            'docs_sent' => 0,
-            'docs_file' => null,
-        ]);
+        // Stiahnuté (sent) živé súbory soft-zmaž, aby sa nezobrazovali ako nahraté.
+        if ($liveFileExists) {
+            $transport->files()->where('type', $slot)->delete();
+        }
 
-        Log::info('API docs_delete completed', [
+        $reason = $transport->driver_notice ?: null;
+
+        $transport->{$slot . '_sent'} = 0;
+        $transport->{$slot . '_file'} = null;
+        $transport->{$slot . '_returned_at'} = now();
+        $transport->{$slot . '_return_reason'} = $reason;
+        $transport->status_id = $transport->resolveUploadStatusId();
+        $transport->save();
+
+        TransportNotice::record($transport->id, $reason, 'return', $slot);
+
+        Log::info("API {$slot}_delete completed", [
             'transport_id' => $request->id,
             'before'       => $before,
             'after'        => [
-                'docs_sent' => $transport->docs_sent,
-                'docs_file' => $transport->docs_file,
+                $slot . '_sent' => $transport->{$slot . '_sent'},
+                $slot . '_file' => $transport->{$slot . '_file'},
+                $slot . '_returned_at' => $transport->{$slot . '_returned_at'},
             ],
         ]);
 
