@@ -351,8 +351,15 @@ class TransportsController extends Admin\AdminController
 
                 'invoice_amount'            => isset($raw['invoice_amount']) ? (float) $raw['invoice_amount'] : null,
                 'invoice_currency'          => $raw['invoice_currency'] ?? null,
+                'invoice_billed_to'         => $raw['invoice_billed_to'] ?? null,
                 'invoice_billed_to_ico'     => $raw['invoice_billed_to_ico'] ?? null,
+                'invoice_billed_to_city'    => $raw['invoice_billed_to_city'] ?? null,
                 'invoice_billed_to_country' => $raw['invoice_billed_to_country'] ?? null,
+
+                // Zdôvodnenia modelu — v Damare je z nich vidno, PREČO kontrola hlási nezhodu.
+                'company_evidence'          => $raw['company_evidence'] ?? null,
+                'amount_evidence'           => $raw['amount_evidence'] ?? null,
+                'vat_evidence'              => $raw['vat_evidence'] ?? null,
 
                 'warnings_count'            => $warningCount,
                 'warning_codes'            => $this->aiWarningCodes($raw, $slot),
