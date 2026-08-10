@@ -236,11 +236,15 @@ class DocumentUploadChecker
             }
 
             if ($expectedAmount !== null) {
-                $lines[] = '- Expected invoice amount (price for the carrier): ' . $expectedAmount
-                    . '. The amount must match EXACTLY to the cent (compare against the invoice net total, or the gross total when VAT applies). Any difference, even a few cents, is a mismatch.';
+                $lines[] = '- Expected invoice amount (price for the carrier, NET / bez DPH): ' . $expectedAmount
+                    . '. Compare NET against NET: put the invoice net total (základ dane) into invoice_amount and compare that number. When the invoice prints only a gross total, subtract the VAT before comparing. The amount must match EXACTLY to the cent; any difference, even a few cents, is a mismatch.';
             } else {
                 $lines[] = '- Expected amount is unknown; read the amount but set amount_matches_expected = "unknown".';
             }
+
+            // Bez tejto inštrukcie model pri faktúrach bez DPH sekcie (prenesenie daňovej
+            // povinnosti) nevie, či prázdne miesto znamená "no", a vyhovorí sa na "unknown".
+            $lines[] = '- MANDATORY: set invoice_has_vat = "yes" when any VAT amount or VAT rate appears on the invoice, and "no" when the invoice states reverse charge / prenesenie daňovej povinnosti or shows no VAT at all. An invoice with no VAT section means "no", not "unknown". Use "unknown" only when the document is not an invoice.';
 
             if ($expectedVat === 'with_vat') {
                 $lines[] = '- VAT rule: carrier and billing company are in the SAME country, so the invoice MUST include VAT (s DPH). If VAT is missing or reverse charge is stated, that is a mismatch.';
@@ -323,11 +327,18 @@ class DocumentUploadChecker
                 'order_number_evidence' => ['type' => 'string'],
                 'carrier_name_found' => ['type' => 'boolean'],
                 'carrier_name_evidence' => ['type' => 'string'],
-                'invoice_amount' => ['type' => 'number'],
+                'invoice_amount' => [
+                    'type' => 'number',
+                    'description' => 'The NET total of the invoice (základ dane, the amount before VAT). Never the gross total. If only a gross total is printed, subtract the VAT first.',
+                ],
                 'invoice_currency' => ['type' => 'string'],
                 'amount_matches_expected' => $matchEnum,
                 'amount_evidence' => ['type' => 'string'],
-                'invoice_has_vat' => ['type' => 'string', 'enum' => ['yes', 'no', 'unknown']],
+                'invoice_has_vat' => [
+                    'type' => 'string',
+                    'enum' => ['yes', 'no', 'unknown'],
+                    'description' => 'Whether VAT appears on the invoice. An invoice with no VAT section (reverse charge) is "no". Use "unknown" only when the document is not an invoice.',
+                ],
                 'vat_matches_expected' => $matchEnum,
                 'vat_evidence' => ['type' => 'string'],
                 'readable' => ['type' => 'boolean'],
