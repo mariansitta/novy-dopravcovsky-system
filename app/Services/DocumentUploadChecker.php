@@ -105,18 +105,86 @@ class DocumentUploadChecker
         $primary = $this->analyze($openAiFileId, $slot, $transport, $config['primary_model'], $config);
         $meta['model_used'] = $config['primary_model'];
 
+        $result = $primary;
+
         $confidence = $primary['confidence'] ?? 0;
         if ($config['primary_model'] !== $config['secondary_model']
             && $confidence < (float) $config['escalation_confidence']) {
             $meta['model_used'] = $config['secondary_model'];
             $meta['escalated'] = true;
-            return $this->analyze($openAiFileId, $slot, $transport, $config['secondary_model'], $config);
+            $result = $this->analyze($openAiFileId, $slot, $transport, $config['secondary_model'], $config);
         }
 
-        return $primary;
+        return $this->rereadIcoOnce($openAiFileId, $slot, $transport, $config, $meta, $result);
     }
 
-    private function analyze(string $openAiFileId, string $slot, Transport $transport, string $model, array $config): array
+    /**
+     * Keď model vráti číslo, ktoré nemôže byť IČO, dá sa mu ešte jedna šanca.
+     *
+     * Opakujeme PRESNE RAZ a voláme analyze() priamo — nie seba ani
+     * analyzeWithFallback() — takže cyklus je vylúčený konštrukciou, rovnako ako
+     * pri eskalácii vyššie. Súbor je v OpenAI už nahratý, platí sa len inferencia.
+     */
+    private function rereadIcoOnce(string $openAiFileId, string $slot, Transport $transport, array $config, array &$meta, array $result): array
+    {
+        if ($slot !== 'bill') return $result;
+
+        $found = (string) ($result['invoice_billed_to_ico'] ?? '');
+
+        if ($this->isValidIco($found)) return $result;
+
+        $correction = trim($found) === ''
+            ? '- CORRECTION: your previous answer left invoice_billed_to_ico empty. Look at the recipient block again and read its IČO. A Czech or Slovak IČO has EXACTLY 8 digits.'
+            : '- CORRECTION: your previous answer returned invoice_billed_to_ico = "'.$found.'", which cannot be an IČO — a Czech or Slovak IČO has EXACTLY 8 digits and a valid check digit. Read the recipient IČO again, digit by digit, ignoring spaces, and do not repeat any digit.';
+
+        try {
+            $retry = $this->analyze($openAiFileId, $slot, $transport, $meta['model_used'], $config, $correction);
+        } catch (\Throwable $e) {
+            // Opakovanie nikdy nesmie zhodiť kontrolu — ostáva pôvodný výsledok.
+            Log::warning('AI doc check IČO re-read failed', [
+                'transport_id' => $transport->transport_id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return $result;
+        }
+
+        $helped = $this->isValidIco((string) ($retry['invoice_billed_to_ico'] ?? ''));
+
+        Log::info('AI doc check IČO re-read', [
+            'transport_id' => $transport->transport_id,
+            'first' => $found,
+            'second' => $retry['invoice_billed_to_ico'] ?? null,
+            'helped' => $helped,
+        ]);
+
+        // Druhý pokus berieme len keď naozaj pomohol, nech neprídeme o ostatné polia.
+        return $helped ? $retry : $result;
+    }
+
+    /**
+     * Kontrolná číslica IČO (mod 11), rovnaká pre SK aj CZ. Neplatné číslo je
+     * spoľahlivý znak zlého prečítania — skutočná firma má IČO platné.
+     */
+    private function isValidIco(string $value): bool
+    {
+        $digits = preg_replace('/\D+/', '', $value);
+
+        if (strlen($digits) !== 8) return false;
+
+        $sum = 0;
+
+        for ($i = 0; $i < 7; $i++) {
+            $sum += (int) $digits[$i] * (8 - $i);
+        }
+
+        $rest = $sum % 11;
+        $check = $rest === 0 ? 1 : ($rest === 1 ? 0 : 11 - $rest);
+
+        return $check === (int) $digits[7];
+    }
+
+    private function analyze(string $openAiFileId, string $slot, Transport $transport, string $model, array $config, string $correction = ''): array
     {
         try {
             $response = $this->client->post('responses', [
@@ -131,7 +199,7 @@ class DocumentUploadChecker
                             'role' => 'user',
                             'content' => [
                                 ['type' => 'input_file', 'file_id' => $openAiFileId],
-                                ['type' => 'input_text', 'text' => $this->buildPrompt($slot, $transport)],
+                                ['type' => 'input_text', 'text' => $this->buildPrompt($slot, $transport, $correction)],
                             ],
                         ],
                     ],
@@ -188,7 +256,7 @@ class DocumentUploadChecker
         return $fileId;
     }
 
-    private function buildPrompt(string $slot, Transport $transport): string
+    private function buildPrompt(string $slot, Transport $transport, string $correction = ''): string
     {
         $expectedType = $slot === 'bill'
             ? 'invoice (faktúra)'
@@ -231,6 +299,7 @@ class DocumentUploadChecker
                 $lines[] = '    * Treat country names and codes as equivalent: CESKO = Česko = CZ; SLOVENSKO = Slovensko = SK. A different wording of the same country is NOT a mismatch.';
                 $lines[] = '  Always fill invoice_billed_to_ico, invoice_billed_to_city and invoice_billed_to_country with what is actually on the invoice (recipient), so the difference can be shown.';
                 $lines[] = '  MANDATORY: read the recipient IČO from the invoice and put the digits into invoice_billed_to_ico. It is almost always printed near the recipient (labelled "IČO"). Never leave invoice_billed_to_ico empty if any IČO is visible for the recipient; ignore spaces when reading it.';
+                $lines[] = '  A Czech or Slovak IČO has EXACTLY 8 digits — never more. It is often printed grouped with spaces (e.g. "256 63 518" = 25663518); read the digits one by one and never repeat one. If you end up with more than 8 digits you are either reading the DIČ / VAT id (which carries a country prefix and belongs in a different field) or grouping the digits wrong.';
             } else {
                 $lines[] = '- The expected billing company is unknown; set company_matches_expected = "unknown".';
             }
@@ -273,6 +342,12 @@ class DocumentUploadChecker
 
         $lines[] = 'Return only JSON matching the schema. Write message_sk in Slovak and message_en in English, short and clear.';
         $lines[] = 'Only report issues that are clear problems. Use severity "warning" for likely mistakes the carrier should fix, "info" for minor notes.';
+
+        // Oprava po prvom pokuse — pripája sa na koniec, nech ju model číta ako poslednú.
+        if ($correction !== '') {
+            $lines[] = '';
+            $lines[] = $correction;
+        }
 
         return implode("\n", $lines);
     }
