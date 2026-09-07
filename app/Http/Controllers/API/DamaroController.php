@@ -202,7 +202,19 @@ class DamaroController extends Controller
         $exists = isset($transport);
 
         if($exists){
-            foreach ($transport->files as $file) $file->delete();
+            // Živý súbor s {slot}_sent = 0 = čerstvý upload dopravcu čakajúci na
+            // stiahnutie damarom – výmena dopravcu ho nesmie zmazať, inak sa doklad
+            // stratí (rovnaký guard ako v transport_request()). Transport sa zmaže,
+            // ale súbor ostane živý a vyzdvihne ho withUnsentFiles(), ktoré pracuje
+            // s withTrashed().
+            foreach ($transport->files as $file) {
+                if (in_array($file->type, ['bill', 'docs'], true) && ! $transport->{$file->type . '_sent'}) {
+                    continue;
+                }
+
+                $file->delete();
+            }
+
             $transport->delete();
         }
 

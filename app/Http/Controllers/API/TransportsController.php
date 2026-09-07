@@ -31,13 +31,28 @@ class TransportsController extends Controller
         ], 200);
     }
     */
+    // Vracia transporty, ktore maju aspon jeden slot cakajuci na vyzdvihnutie damarom
+    // (zivy subor + {slot}_sent = 0). Povodna verzia mala nezatvorkovane whereHas/orWhereHas,
+    // takze AND/OR precedencia rozdelila podmienku na dve vetvy: upload, kde bol zivy iba
+    // "docs" a status_id ostal NULL, sa nevratil nikdy, a naopak transport so zivym "bill"
+    // sa vracal stale dokola aj po bill_sent = 1.
     public function get(){
         $transport_ids = Transport::whereNotNull('transport_id')
-            ->whereHas('files', function ($q){
-                $q->where('type', 'bill');
-            })->orWhereHas('files', function ($q){
-                $q->where('type', 'docs');
-            })->where('status_id', Status::where('slug', 'uploaded')->first()->id )->get()->pluck('transport_id');
+            ->where(function ($q){
+                $q->where(function ($q){
+                    $q->where('bill_sent', 0)
+                        ->whereHas('files', function ($f){
+                            $f->where('type', 'bill');
+                        });
+                })->orWhere(function ($q){
+                    $q->where('docs_sent', 0)
+                        ->whereHas('files', function ($f){
+                            $f->where('type', 'docs');
+                        });
+                });
+            })
+            ->get()
+            ->pluck('transport_id');
 
         return response()->json([
             'transports' => $transport_ids
@@ -347,12 +362,16 @@ class TransportsController extends Controller
 
     public function withUnsentFiles(): \Illuminate\Http\JsonResponse
     {
+        // Povodne tu bolo whereNull('status_id'), co recovery obmedzovalo na ciastocne
+        // uploady - transport, ktory uz dosiahol "uploaded"/"processed", sa sem nikdy
+        // nedostal, hoci damaro subor nemalo. Rozhoduje vylucne {slot}_sent = 0.
+        $cutoff = now()->subHours(2);
+
         $transports = Transport::withTrashed()
             ->whereNotNull('transport_id')
-            ->whereNull('status_id')
             ->where(fn($q) => $q->where('bill_sent', 0)->orWhere('docs_sent', 0))
-            ->whereHas('files', fn($q) => $q->whereIn('type', ['bill', 'docs'])->where('created_at', '<', now()->subDay()))
-            ->with(['files' => fn($q) => $q->whereIn('type', ['bill', 'docs'])->where('created_at', '<', now()->subDay())])
+            ->whereHas('files', fn($q) => $q->whereIn('type', ['bill', 'docs'])->where('created_at', '<', $cutoff))
+            ->with(['files' => fn($q) => $q->whereIn('type', ['bill', 'docs'])->where('created_at', '<', $cutoff)])
             ->get()
             ->map(fn($t) => [
                 'transport_id' => (int) $t->transport_id,
