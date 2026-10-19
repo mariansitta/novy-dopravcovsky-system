@@ -335,6 +335,45 @@ class TransportsController extends Controller
         return response()->json(['transports' => $transports]);
     }
 
+    // Dátumy nahratia faktúry/dokumentov pre zoznam damaro transport_id (doplnenie histórie v damare).
+    // Staré záznamy bez {slot}_uploaded_at: dátum posledného súboru na disku (to, čo sa doteraz
+    // ručne pozeralo cez FTP), a keď súbor chýba, files.created_at.
+    public function uploadedDates(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $ids = array_slice((array) $request->input('ids', []), 0, 500);
+
+        if (empty($ids)) {
+            return response()->json(['transports' => []]);
+        }
+
+        $transports = Transport::withTrashed()
+            ->whereIn('transport_id', $ids)
+            ->with(['files' => fn($q) => $q->withTrashed()->whereIn('type', ['bill', 'docs'])])
+            ->get();
+
+        $result = $transports->map(function ($t) {
+            $dates = ['transport_id' => (int) $t->transport_id];
+
+            foreach (['bill', 'docs'] as $slot) {
+                $dates[$slot . '_uploaded_at'] = $t->uploadedAtFor($slot);
+
+                if ($dates[$slot . '_uploaded_at'] === null) {
+                    $file = $t->files->where('type', $slot)->sortByDesc('id')->first();
+                    if ($file) {
+                        $fullPath = public_path($file->get_path());
+                        $dates[$slot . '_uploaded_at'] = is_file($fullPath)
+                            ? date('Y-m-d H:i:s', filemtime($fullPath))
+                            : $file->created_at?->format('Y-m-d H:i:s');
+                    }
+                }
+            }
+
+            return $dates;
+        })->values();
+
+        return response()->json(['transports' => $result]);
+    }
+
     public function byStatus(Request $request): \Illuminate\Http\JsonResponse
     {
         $slugs = $request->input('statuses', []);

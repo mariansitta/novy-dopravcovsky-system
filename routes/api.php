@@ -62,6 +62,7 @@ Route::middleware(['api_key'])->group(function (){
     // Companies sync (fakturačné firmy z Damara, zrkadlo tabuľky companies)
     Route::post('/companies/sync', [API\CompaniesController::class, 'sync'])->name('companies.sync');
     Route::post('/transports/with-unsent-files', [API\TransportsController::class, 'withUnsentFiles'])->name('transports.with_unsent_files');
+    Route::post('/transports/uploaded-dates', [API\TransportsController::class, 'uploadedDates'])->name('transports.uploaded_dates');
 
     // Driver Messages
     Route::post('/driver-messages/get', [API\DriverMessagesController::class, 'get'])->name('driver_messages.get');

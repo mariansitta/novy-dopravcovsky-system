@@ -417,6 +417,30 @@ class DocumentReturnFlowTest extends TestCase
         $this->travelBack();
     }
 
+    public function test_uploaded_dates_endpoint_falls_back_to_file_date_for_history(): void
+    {
+        $user = $this->makeUser();
+        $transport = $this->makeTransport($user);
+
+        $this->travelTo(Carbon::parse('2026-10-01 08:15:00'));
+        $this->uploadSlot($user, $transport, 'bill')->assertRedirect();
+        $this->travelBack();
+
+        // Historický záznam: stĺpec prázdny, súbor na disku má dátum nahratia.
+        $transport->refresh();
+        $transport->forceFill(['bill_uploaded_at' => null])->save();
+        $mtime = Carbon::parse('2026-09-15 10:00:00')->getTimestamp();
+        touch(public_path($transport->bill->get_path()), $mtime);
+
+        $this->api('/transports/uploaded-dates', ['ids' => [$transport->transport_id]])
+            ->assertOk()
+            ->assertJson(['transports' => [[
+                'transport_id' => (int) $transport->transport_id,
+                'bill_uploaded_at' => date('Y-m-d H:i:s', $mtime),
+                'docs_uploaded_at' => null,
+            ]]]);
+    }
+
     public function test_reupload_updates_and_delete_clears_uploaded_at(): void
     {
         $user = $this->makeUser();
