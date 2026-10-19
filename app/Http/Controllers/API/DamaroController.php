@@ -241,10 +241,15 @@ class DamaroController extends Controller
         $transportIds = $request->input('tranports_ids', []);
 
         $transports_delete_ids = array();
-        $transports_delete = Transport::whereNotIn('transport_id', $transportIds)->get();
+        $transports_delete = Transport::whereNotIn('transport_id', $transportIds)->with('files')->get();
 
         foreach ($transports_delete as $transport) {
-            if ($transport->bill_file && $transport->docs_file) {
+            // Doklad nahratý dopravcom, ktorý si damaro ešte nestiahol (napr. upload počas
+            // behu hodinového jobu po /transports/get) – zmazaním by sa nenávratne stratil.
+            $pendingPickup = (! $transport->bill_sent && $transport->hasLiveFile('bill'))
+                || (! $transport->docs_sent && $transport->hasLiveFile('docs'));
+
+            if ($transport->bill_file && $transport->docs_file && ! $pendingPickup) {
                 $this->delete_files($transport->files);
                 $transport->delete();
                 $transports_delete_ids[] = $transport->transport_id;
