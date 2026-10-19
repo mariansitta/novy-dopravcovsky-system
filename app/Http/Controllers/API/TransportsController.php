@@ -96,6 +96,8 @@ class TransportsController extends Controller
             'docs' => $docsExists && !$transport->docs_sent,
             'due_date' => $transport->due_date,
             'notify_email' => $notifyEmail,
+            'bill_uploaded_at' => $transport->uploadedAtFor('bill'),
+            'docs_uploaded_at' => $transport->uploadedAtFor('docs'),
         ], 200);
     }
     /*
@@ -119,7 +121,13 @@ class TransportsController extends Controller
     public function file(DocumentsGetRequest $request){
         $transport = Transport::where('transport_id', $request->id)->firstOrFail();
 
-        return response()->download($transport->{$request->file}->get_path());
+        // Skutočný čas nahratia dopravcom – damaro ho má použiť namiesto času stiahnutia.
+        $headers = [];
+        if ($uploadedAt = $transport->uploadedAtFor($request->file)) {
+            $headers['X-Uploaded-At'] = $uploadedAt;
+        }
+
+        return response()->download($transport->{$request->file}->get_path(), null, $headers);
     }
 
     // Update transport file_sent
@@ -378,6 +386,9 @@ class TransportsController extends Controller
                 'has_bill'     => $t->files->where('type', 'bill')->isNotEmpty() && !$t->bill_sent,
                 'has_docs'     => $t->files->where('type', 'docs')->isNotEmpty() && !$t->docs_sent,
                 'uploaded_at'  => $t->files->min('created_at'),
+                // Per-slot čas nahratia; staré záznamy bez stĺpca padnú na files.created_at.
+                'bill_uploaded_at' => $t->uploadedAtFor('bill') ?? $t->files->where('type', 'bill')->max('created_at')?->format('Y-m-d H:i:s'),
+                'docs_uploaded_at' => $t->uploadedAtFor('docs') ?? $t->files->where('type', 'docs')->max('created_at')?->format('Y-m-d H:i:s'),
             ])
             ->filter(fn($item) => $item['has_bill'] || $item['has_docs'])
             ->values();

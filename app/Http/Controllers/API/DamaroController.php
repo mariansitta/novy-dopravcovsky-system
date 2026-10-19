@@ -171,6 +171,8 @@ class DamaroController extends Controller
             'docs' => $docs,
             'due_date' => $due_date,
             'driver_notice' => $driver_notice,
+            'bill_uploaded_at' => optional($transport)->uploadedAtFor('bill'),
+            'docs_uploaded_at' => optional($transport)->uploadedAtFor('docs'),
         ], 200);
     }
 

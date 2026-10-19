@@ -16,6 +16,8 @@ class Transport extends BaseModel
         'bill_return_reason',
         'docs_returned_at',
         'docs_return_reason',
+        'bill_uploaded_at',
+        'docs_uploaded_at',
         'bill_file',
         'docs_file',
         'docs_sent',
@@ -51,6 +53,8 @@ class Transport extends BaseModel
         'unloadings_json' => 'array',
         'bill_returned_at' => 'datetime',
         'docs_returned_at' => 'datetime',
+        'bill_uploaded_at' => 'datetime',
+        'docs_uploaded_at' => 'datetime',
     ];
 
     protected $dates = ['deleted_at', 'paid_at'];
@@ -83,6 +87,13 @@ class Transport extends BaseModel
         }
 
         return $this->files()->where('type', $slot)->exists();
+    }
+
+    // Čas nahratia dokladu dopravcom vo formáte pre damaro – od neho sa počíta
+    // splatnosť (nie od času, kedy si damaro súbor stiahlo).
+    public function uploadedAtFor(string $slot): ?string
+    {
+        return $this->{$slot . '_uploaded_at'}?->format('Y-m-d H:i:s');
     }
 
     // Slot je vrátený na opravu: damaro ho vrátilo a dopravca ešte nenahral opravu.

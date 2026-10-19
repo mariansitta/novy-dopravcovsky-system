@@ -10,6 +10,7 @@ use App\Models\TransportNotice;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\File as FileFacade;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
@@ -379,5 +380,62 @@ class DocumentReturnFlowTest extends TestCase
         $this->assertSame(0, (int) $transport->bill_sent);
         $this->assertSame(0, (int) $transport->docs_sent);
         $this->assertSame('uploaded', $transport->status_slug);
+        $this->assertNotNull($transport->bill_uploaded_at);
+        $this->assertNotNull($transport->docs_uploaded_at);
+    }
+
+    public function test_upload_records_uploaded_at_and_exposes_it_to_damaro(): void
+    {
+        $user = $this->makeUser();
+        $transport = $this->makeTransport($user);
+
+        $this->travelTo(Carbon::parse('2026-10-01 08:15:00'));
+        $this->uploadSlot($user, $transport, 'bill')->assertRedirect();
+
+        // Docs prídu neskôr – bill si musí držať svoj čas.
+        $this->travelTo(Carbon::parse('2026-10-03 14:00:00'));
+        $this->uploadSlot($user, $transport, 'docs')->assertRedirect();
+
+        // Damaro sťahuje až o týždeň – čas nahratia sa nesmie posunúť.
+        $this->travelTo(Carbon::parse('2026-10-10 09:00:00'));
+
+        $this->api('/transport/exists', ['id' => $transport->transport_id])
+            ->assertOk()
+            ->assertJson([
+                'bill_uploaded_at' => '2026-10-01 08:15:00',
+                'docs_uploaded_at' => '2026-10-03 14:00:00',
+            ]);
+
+        $this->api('/transport/file', ['id' => $transport->transport_id, 'file' => 'bill'])
+            ->assertOk()
+            ->assertHeader('X-Uploaded-At', '2026-10-01 08:15:00');
+
+        $this->api('/transport/request', $this->syncPayload($transport, $user))
+            ->assertOk()
+            ->assertJson(['bill_uploaded_at' => '2026-10-01 08:15:00']);
+
+        $this->travelBack();
+    }
+
+    public function test_reupload_updates_and_delete_clears_uploaded_at(): void
+    {
+        $user = $this->makeUser();
+        $transport = $this->makeTransport($user);
+
+        $this->travelTo(Carbon::parse('2026-10-01 08:00:00'));
+        $this->uploadSlot($user, $transport, 'bill')->assertRedirect();
+
+        // Náhrada súboru (UploadTrait prepíše ten istý files riadok) – čas sa musí aktualizovať.
+        $this->travelTo(Carbon::parse('2026-10-02 10:00:00'));
+        $this->uploadSlot($user, $transport, 'bill')->assertRedirect();
+        $this->assertSame('2026-10-02 10:00:00', $transport->fresh()->uploadedAtFor('bill'));
+
+        $this->actingAs($user)
+            ->withoutMiddleware(VerifyCsrfToken::class)
+            ->post(route('transports.document_delete', $transport->id), ['column' => 'bill'])
+            ->assertRedirect();
+        $this->assertNull($transport->fresh()->bill_uploaded_at);
+
+        $this->travelBack();
     }
 }

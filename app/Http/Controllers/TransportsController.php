@@ -146,6 +146,7 @@ class TransportsController extends Admin\AdminController
         $filename = $this->upload_file($request, 'bill', 'transports', $transport, 'bill');
         $transport->bill_file = $filename;
         $transport->bill_sent = 0;
+        $transport->bill_uploaded_at = now();
         $this->clearReturnedState($transport, 'bill');
         $transport->status_id = $transport->resolveUploadStatusId();
 
@@ -167,6 +168,7 @@ class TransportsController extends Admin\AdminController
         $filename = $this->upload_file($request, 'docs', 'transports', $transport, 'docs');
         $transport->docs_file = $filename;
         $transport->docs_sent = 0;
+        $transport->docs_uploaded_at = now();
         $this->clearReturnedState($transport, 'docs');
         $transport->status_id = $transport->resolveUploadStatusId();
 
@@ -191,11 +193,13 @@ class TransportsController extends Admin\AdminController
         if ($billFilename) {
             $transport->bill_file = $billFilename;
             $transport->bill_sent = 0;
+            $transport->bill_uploaded_at = now();
             $this->clearReturnedState($transport, 'bill');
         }
         if ($docsFilename) {
             $transport->docs_file = $docsFilename;
             $transport->docs_sent = 0;
+            $transport->docs_uploaded_at = now();
             $this->clearReturnedState($transport, 'docs');
         }
 
@@ -418,9 +422,11 @@ class TransportsController extends Admin\AdminController
         if ($request->column === 'bill') {
             $transport->bill_file = null;
             $transport->bill_sent = 0;
+            $transport->bill_uploaded_at = null;
         } else {
             $transport->docs_file = null;
             $transport->docs_sent = 0;
+            $transport->docs_uploaded_at = null;
         }
 
         // Status "Čaká na spracovanie" platí len keď sú nahraté OBA doklady.
